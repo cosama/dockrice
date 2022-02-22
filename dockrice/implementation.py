@@ -9,55 +9,44 @@ from typing import Union, List, Tuple, Dict
 PathLike = Union[pathlib.PurePath, str]
 
 
-class DockerPath():
+class DockerPath(type(pathlib.Path())):
+    def __new__(
+        cls,
+        *args,
+        **__,
+    ):
+        return super().__new__(cls, *args)
+
     def __init__(
-        self, path: PathLike,
+        self,
+        *_,
         mount_path: PathLike=None,
         read_only: bool=False,
         mount_parent: Union[bool, None]=None
     ) -> None:
-        self.path = path
         self.mount_path = mount_path
         if mount_parent is None:
-            if self.path.exists():
+            if self.exists():
                 mount_parent = False
             else:
-                if self.path.parent.exists():
+                if self.parent.exists():
                     mount_parent = True
                 else:
-                    ValueError(f"Neither {str(self.path)} nor it's parent exist.")
+                    ValueError(f"Neither {str(self)} nor it's parent exist.")
         self._mount_parent = mount_parent
         self._read_only = read_only
-
-
-    @property
-    def path(self) -> pathlib.PurePath:
-        return self._path
-
-    @path.setter
-    def path(self, path: PathLike):
-        self._path = pathlib.Path(path)
 
     @property
     def mount_path(self: PathLike) -> pathlib.PurePath:
         if self._mount_parent:
-            return pathlib.PosixPath(self._mount_path, self.path.name)
+            return pathlib.PosixPath(self._mount_path, self.name)
         return self._mount_path
 
-    @property
-    def name(self) -> pathlib.PurePath:
-        return self.path.name
-
-    @property
-    def parent(self) -> pathlib.PurePath:
-        return self.path.parent
-
-    def __fspath__(self) -> str:
-        return str(self.path)
-
     @mount_path.setter
-    def mount_path(self, path: PathLike)-> pathlib.PurePath:
-        if path is None:
+    def mount_path(self, path: PathLike):
+        if isinstance(path, tuple):
+            path = pathlib.PosixPath(*path)
+        elif path is None:
             path = pathlib.PosixPath("/temp", str(uuid.uuid4()))
         else:
             path = pathlib.PosixPath(path)
@@ -67,25 +56,25 @@ class DockerPath():
     def _get_target_source(self) -> Tuple[pathlib.PurePath]:
         if self._mount_parent:
             target = self.mount_path.parent
-            source = self.path.parent
+            source = self.parent
         else:
             target = self.mount_path
-            source = self.path
-        return target, source
+            source = self
+        return str(target), str(source.resolve())
 
     def get_mount(self) -> Mount:
         target, source = self._get_target_source()
         return Mount(
-            str(target),
-            str(source.resolve()),
+            target,
+            source,
             type='bind',
             read_only=self._read_only,
         )
 
-    def get_mount_string(self) -> List[str]:
+    def get_mount_string(self) -> str:
         target, source = self._get_target_source()
-        access_rights= 'ro' if self.read_only else 'rw'
-        return f"{str(source.resolve())}:{str(target)}:{access_rights}"
+        access_rights= 'ro' if self._read_only else 'rw'
+        return f"{source}:{target}:{access_rights}"
 
 
 class DockerActionFactory:
@@ -108,37 +97,40 @@ class DockerActionFactory:
         self.mounts = []
         self.run_command = []
 
-    def new_action(self, action='store'):
+    def _recursive_resolve_args(self, parse_value, option_string=None):
+        if option_string is not None:
+            self.run_command.append(option_string)
+
+        if isinstance(parse_value, (list, tuple)):
+            ret_value = parse_value.__class__()
+            for v in parse_value:
+                ret_value.append(self._recursive_resolve_args(v))
+            return ret_value
+
+        if isinstance(parse_value, pathlib.PurePath):
+            if not isinstance(parse_value, DockerPath):
+                ret_value = DockerPath(parse_value)
+            else:
+                ret_value = parse_value
+            self.run_command.append(str(ret_value.mount_path))
+            self.mounts.append(ret_value.get_mount())
+        else:
+            self.run_command.append(str(parse_value))
+            ret_value = parse_value
+
+        return ret_value
+
+    def new_action(factory_self, action='store'):
 
         if isinstance(action, str):
-            action = getattr(argparse, self.select[action])
+            action = getattr(argparse, factory_self.select[action])
 
         class DockerAction(action):
-            mounts = self.mounts
-            run_command = self.run_command
-
-            def _recursive_resolve_args(self, parse_value, option_string=None):
-                if option_string is not None:
-                    self.run_command.append(option_string)
-                if isinstance(parse_value, (list, tuple)):
-                    ret_value = parse_value.__class__()
-                    for v in parse_value:
-                        ret_value.append(self._recursive_resolve_args(v))
-                    return ret_value
-                if isinstance(parse_value, (pathlib.PurePath, DockerPath)):
-                    if isinstance(parse_value, pathlib.PurePath):
-                        ret_value = DockerPath(parse_value)
-                    else:
-                        ret_value = parse_value
-                    self.run_command.append(str(parse_value.mount_path))
-                    self.mounts.append(parse_value.get_mount())
-                else:
-                    self.run_command.append(str(parse_value))
-                    ret_value = parse_value
-                return ret_value
+            mounts = factory_self.mounts
+            run_command = factory_self.run_command
 
             def __call__(self, parser, namespace, values, option_string=None):
-                values = self._recursive_resolve_args(values, option_string=option_string)
+                factory_self._recursive_resolve_args(values, option_string=option_string)
                 super().__call__(parser, namespace, values, option_string=option_string)
 
         return DockerAction
