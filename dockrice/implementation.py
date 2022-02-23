@@ -19,22 +19,55 @@ class DockerPath(type(pathlib.Path())):
 
     def __init__(
         self,
-        *_,
+        *path,
         mount_path: PathLike=None,
         read_only: bool=False,
         mount_parent: Union[bool, None]=None
     ) -> None:
+        """Create a DockerPath object.
+
+        Parameters
+        ----------
+        path: PathLike (identical to pathlib.Path creator)
+            The host path.
+        mount_path : PathLike, optional
+            The path inside the docker container, by default None, e.g.
+            created by a uuid. CAUTION: If 'mount_parent' is true, this will be
+            the parent path and path.name will be appended, otherwise this will
+            be the full path.
+        read_only : bool, optional
+            Mount the path with read only access, by default False.
+        mount_parent : Union[bool, None], optional
+            Do not mount path itself, but it's parent instead, by default None.
+            If None, will check if the path exist, if it does, this is set to False,
+            if not it is set to True.
+        """
         self.mount_path = mount_path
         if mount_parent is None:
             if self.exists():
                 mount_parent = False
             else:
-                if self.parent.exists():
-                    mount_parent = True
-                else:
-                    ValueError(f"Neither {str(self)} nor it's parent exist.")
-        self._mount_parent = mount_parent
-        self._read_only = read_only
+                mount_parent = True
+        self.mount_parent = mount_parent
+        self.read_only = read_only
+
+    @property
+    def read_only(self) -> bool:
+        return self._read_only
+
+    @read_only.setter
+    def read_only(self, value: bool):
+        assert value in (False, True), "read_only needs to be a boolean"
+        self._read_only = value
+
+    @property
+    def mount_parent(self) -> bool:
+        return self._mount_parent
+
+    @mount_parent.setter
+    def mount_parent(self, value: bool):
+        assert value in (False, True), "mount_parent needs to be a boolean"
+        self._mount_parent = value
 
     @property
     def mount_path(self: PathLike) -> pathlib.PurePath:
