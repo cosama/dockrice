@@ -15,14 +15,15 @@ class DockerPath(type(pathlib.Path())):
         *args,
         **__,
     ):
+        """Needed to overwrite pathlib.Path. See __init__ for more docs."""
         return super().__new__(cls, *args)
 
     def __init__(
         self,
         *path,
-        mount_path: PathLike=None,
-        read_only: bool=False,
-        mount_parent: Union[bool, None]=None
+        mount_path: PathLike = None,
+        read_only: bool = False,
+        mount_parent: Union[bool, None] = None,
     ) -> None:
         """Create a DockerPath object.
 
@@ -32,9 +33,9 @@ class DockerPath(type(pathlib.Path())):
             The host path.
         mount_path : PathLike, optional
             The path inside the docker container, by default None, e.g.
-            created by a uuid. CAUTION: If 'mount_parent' is true, this will be
-            the parent path and path.name will be appended, otherwise this will
-            be the full path.
+            created by a uuid + path.suffix. CAUTION: If 'mount_parent' is true,
+            this will be the parent path and path.name will be appended, otherwise
+            this will be the full path.
         read_only : bool, optional
             Mount the path with read only access, by default False.
         mount_parent : Union[bool, None], optional
@@ -80,7 +81,7 @@ class DockerPath(type(pathlib.Path())):
         if isinstance(path, tuple):
             path = pathlib.PosixPath(*path)
         elif path is None:
-            path = pathlib.PosixPath("/temp", str(uuid.uuid4()))
+            path = pathlib.PosixPath("/temp", str(uuid.uuid4()) + self.suffix)
         else:
             path = pathlib.PosixPath(path)
         assert path.is_absolute(), "Require an absolute path for the mount path"
@@ -100,49 +101,68 @@ class DockerPath(type(pathlib.Path())):
         return Mount(
             target,
             source,
-            type='bind',
+            type="bind",
             read_only=self._read_only,
         )
 
     def get_mount_string(self) -> str:
         target, source = self._get_target_source()
-        access_rights= 'ro' if self._read_only else 'rw'
+        access_rights = "ro" if self._read_only else "rw"
         return f"{source}:{target}:{access_rights}"
 
 
 class DockerActionFactory:
 
     select = {
-        'store': "_StoreAction",
-        'store_const': "_StoreConstAction",
-        'store_true': "_StoreTrueAction",
-        'store_false': "_StoreFalseAction",
-        'append': "_AppendAction",
-        'append_const': "_AppendConstAction",
-        'count': "_CountAction",
-        'help': "_HelpAction",
-        'version': "_VersionAction",
-        'parsers': "_SubParsersAction",
-        'extend': "_ExtendAction",
+        "store": "_StoreAction",
+        "store_const": "_StoreConstAction",
+        "store_true": "_StoreTrueAction",
+        "store_false": "_StoreFalseAction",
+        "append": "_AppendAction",
+        "append_const": "_AppendConstAction",
+        "count": "_CountAction",
+        "help": "_HelpAction",
+        "version": "_VersionAction",
+        "parsers": "_SubParsersAction",
+        "extend": "_ExtendAction",
     }
 
     def __init__(self):
         self.mounts = []
         self.run_command = []
 
-    def _recursive_resolve_args(self, parse_value, option_string=None):
+    def _recursive_resolve_args(
+        self,
+        parse_value,
+        option_string=None,
+        mount_parent=None,
+        read_only=False,
+        mount_path=None,
+    ):
         if option_string is not None:
             self.run_command.append(option_string)
 
         if isinstance(parse_value, (list, tuple)):
             ret_value = parse_value.__class__()
             for v in parse_value:
-                ret_value.append(self._recursive_resolve_args(v))
+                ret_value.append(
+                    self._recursive_resolve_args(
+                        v,
+                        mount_parent=mount_parent,
+                        read_only=read_only,
+                        mount_path=mount_path,
+                    )
+                )
             return ret_value
 
         if isinstance(parse_value, pathlib.PurePath):
             if not isinstance(parse_value, DockerPath):
-                ret_value = DockerPath(parse_value)
+                ret_value = DockerPath(
+                    parse_value,
+                    mount_parent=mount_parent,
+                    read_only=read_only,
+                    mount_path=mount_path,
+                )
             else:
                 ret_value = parse_value
             self.run_command.append(str(ret_value.mount_path))
@@ -153,7 +173,7 @@ class DockerActionFactory:
 
         return ret_value
 
-    def new_action(factory_self, action='store'):
+    def new_action(factory_self, action="store"):
 
         if isinstance(action, str):
             action = getattr(argparse, factory_self.select[action])
@@ -162,8 +182,23 @@ class DockerActionFactory:
             mounts = factory_self.mounts
             run_command = factory_self.run_command
 
+            def __init__(self, *args, **kwargs):
+                self.mount_parent = kwargs.pop("mount_parent", None)
+                self.read_only = kwargs.pop("read_only", False)
+                self.mount_path = kwargs.pop("mount_path", None)
+                print(
+                    f"Setting: {self.mount_parent}, {self.read_only}, {self.mount_path}"
+                )
+                super().__init__(*args, **kwargs)
+
             def __call__(self, parser, namespace, values, option_string=None):
-                factory_self._recursive_resolve_args(values, option_string=option_string)
+                factory_self._recursive_resolve_args(
+                    values,
+                    option_string=option_string,
+                    mount_parent=self.mount_parent,
+                    read_only=self.read_only,
+                    mount_path=self.mount_path,
+                )
                 super().__call__(parser, namespace, values, option_string=option_string)
 
         return DockerAction
@@ -173,8 +208,8 @@ def run_in_docker(
     docker_image: str,
     scriptname: Union[PathLike, DockerPath],
     args_list: List[Dict],
-    prefix: Union[str, None]="python",
-    **kwargs
+    prefix: Union[str, None] = "python",
+    **kwargs,
 ):
 
     # create an action factory, this is used to collect the docker args
@@ -205,10 +240,15 @@ def run_in_docker(
             argument_kwargs["action"] = action_factory.new_action(argument["action"])
         else:
             argument_kwargs["action"] = action_factory.new_action()
-        if "type" in argument and issubclass(argument["type"], (pathlib.PurePath, DockerPath)):
-            argument_kwargs["type"] = DockerPath
+        if "type" in argument and issubclass(
+            argument["type"], (pathlib.PurePath, DockerPath)
+        ):
+            argument_kwargs["type"] = argument["type"]
         if "nargs" in argument:
             argument_kwargs["nargs"] = argument["nargs"]
+        argument_kwargs["mount_parent"] = argument.pop("mount_parent", None)
+        argument_kwargs["read_only"] = argument.pop("read_only", False)
+        argument_kwargs["mount_path"] = argument.pop("mount_path", None)
 
         parser.add_argument(*option_strings, **argument_kwargs)
 
