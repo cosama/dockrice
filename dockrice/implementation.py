@@ -3,7 +3,7 @@ import uuid
 from docker.types import Mount
 import docker
 import argparse
-from typing import Union, List, Tuple, Dict
+from typing import Union, List, Tuple, Dict, Any
 
 
 PathLike = Union[pathlib.PurePath, str]
@@ -201,18 +201,42 @@ class DockerActionFactory:
         return DockerAction
 
 
-def run_in_docker(
-    docker_image: str,
+def parse_docker_args(
     scriptname: Union[PathLike, DockerPath],
-    args_list: List[Dict],
-    prefix: Union[str, None] = "python",
-    **kwargs,
-):
+    args_list: List[Dict[str, Any]],
+    prefix: Union[str, None]="python",
+    namespace: argparse.Namespace=None,
+    args: List[str]=None
+) -> Tuple[List[str], List[docker.types.Mount]]:
+    """parse arguments to populate a run command and a docker Mount list.
+
+    Parameters
+    ----------
+    scriptname : Union[PathLike, DockerPath]
+        The name of the script to be run inside a docker
+    args_list : List[Dict[str, Any]]
+        A list of arguments to populate an argument parser. Requires
+        an 'option_strins' entry and will use the following optional entries:
+        'action', 'type', 'nargs', 'mount_parent', 'read_only', 'mount_path'.
+        All other entries will be ignored. 'type' will only be used if it is
+        a Path-like object. All other entries will be returned as strings, except
+        for those converted by an 'action'.
+    prefix : Union[str, None], optional
+        A prefix, defining how the script needs to be called, by default "python"
+    namespace : argparse.Namespace, optional
+        If provided the internal argument parser will populate this, by default None
+    args : List[str], optional
+        A list of arguments to parse, by default sys.argv will be used, by default None
+
+    Returns
+    -------
+    Tuple[List[str], List[docker.types.Mount]]
+        The command that needs to be run in a docker and the mounts that need to be,
+        mounted for the command to executed correctly in the docker.
+    """
 
     # create an action factory, this is used to collect the docker args
     action_factory = DockerActionFactory()
-    # prepare initial mounts
-    action_factory.mounts.extend(kwargs.pop("mounts", []))
 
     # check prefix
     if prefix is not None:
@@ -225,7 +249,7 @@ def run_in_docker(
     action_factory.run_command.append(str(scriptname.mount_path))
 
     # create a minimal argument parser based on the action factory's action
-    parser = argparse.ArgumentParser(add_help=False, argument_default=argparse.SUPPRESS)
+    parser = argparse.ArgumentParser(add_help=False)
     for argument in args_list:
         if isinstance(argument["option_strings"], str):
             option_strings = [argument["option_strings"]]
@@ -233,6 +257,7 @@ def run_in_docker(
             option_strings = argument["option_strings"]
 
         argument_kwargs = {}
+        # some actions have different default nargs, so we add the action
         if "action" in argument:
             argument_kwargs["action"] = action_factory.new_action(argument["action"])
         else:
@@ -250,16 +275,32 @@ def run_in_docker(
         parser.add_argument(*option_strings, **argument_kwargs)
 
     # run the parser and populate the action factory
-    unknown_args = parser.parse_known_args()[1]
+    unknown_args = parser.parse_known_args(args=args, namespace=namespace)[1]
 
     # add unknown arguments, FIXME: is it okay to add them to the end?
     action_factory.run_command.extend(unknown_args)
+
+    return action_factory.run_command, action_factory.mounts
+
+def run_in_docker(
+    docker_image: str,
+    scriptname: Union[PathLike, DockerPath],
+    args_list: List[Dict],
+    prefix: Union[str, None] = "python",
+    **kwargs,
+):
+
+    run_command, mounts = parse_docker_args(
+        scriptname,
+        args_list,
+        prefix=prefix
+    )
 
     # run the docker
     client = docker.from_env()
     return client.containers.run(
         docker_image,
-        action_factory.run_command,
-        mounts=action_factory.mounts,
+        run_command,
+        mounts=mounts,
         **kwargs,
     )
