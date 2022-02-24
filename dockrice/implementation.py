@@ -253,7 +253,7 @@ def run_in_docker(
         parser.add_argument(*option_strings, **argument_kwargs)
 
     # run the parser and populate the action factory
-    _, unknown_args = parser.parse_known_args()
+    unknown_args = parser.parse_known_args()[1]
 
     # add unknown arguments, FIXME: is it okay to add them to the end?
     action_factory.run_command.extend(unknown_args)
