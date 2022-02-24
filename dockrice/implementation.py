@@ -186,9 +186,6 @@ class DockerActionFactory:
                 self.mount_parent = kwargs.pop("mount_parent", None)
                 self.read_only = kwargs.pop("read_only", False)
                 self.mount_path = kwargs.pop("mount_path", None)
-                print(
-                    f"Setting: {self.mount_parent}, {self.read_only}, {self.mount_path}"
-                )
                 super().__init__(*args, **kwargs)
 
             def __call__(self, parser, namespace, values, option_string=None):
