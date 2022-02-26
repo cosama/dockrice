@@ -9,13 +9,17 @@ parser_arguments = [
     dict(
         option_strings="--bool-flag",
         help="A boolean flag.",
-        default=False,
         action="store_true",
     ),
-    dict(option_strings="--int-flag", help="A integer.", default=None, type=int),
+    dict(
+        option_strings="--int-flag",
+        help="A integer.",
+        default=None,
+        type=int
+    ),
     dict(
         option_strings="output_files",
-        help="A file to read data from",
+        help="A bunch of files to write data to",
         type=pathlib.Path,
         nargs="+",
     ),
@@ -24,13 +28,15 @@ parser_arguments = [
 if os.getenv(check_name, None) is None:
     from dockrice import run_in_docker
 
-    rec = run_in_docker(
+    container = run_in_docker(
         docker_image="python",
         scriptname=__file__,
         args_list=parser_arguments,
         environment={check_name: ""},
+        detach=True
     )
-    print(rec.decode("ASCII"))
+    for line in container.logs(stream=True):
+        print(line.decode("ASCII").strip())
     sys.exit()
 
 parser = argparse.ArgumentParser(
