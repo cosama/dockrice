@@ -215,6 +215,7 @@ def parse_docker_args(
     prefix: Union[str, None] = "python",
     namespace: argparse.Namespace = None,
     args: List[str] = None,
+    **kwargs
 ) -> Tuple[List[str], List[docker.types.Mount]]:
     """parse arguments to populate a run command and a docker Mount list.
 
@@ -224,17 +225,16 @@ def parse_docker_args(
         The name of the script to be run inside a docker
     args_list : List[Dict[str, Any]]
         A list of arguments to populate an argument parser. Requires
-        an 'option_strins' entry and will use the following optional entries:
-        'action', 'type', 'nargs', 'mount_parent', 'read_only', 'mount_path'.
-        All other entries will be ignored. 'type' will only be used if it is
-        a Path-like object. All other entries will be returned as strings, except
-        for those converted by an 'action'.
+        an 'option_strings' entry and can use additional to the normal kwargs
+        these options: 'mount_parent', 'read_only', 'mount_path'.
     prefix : Union[str, None], optional
         A prefix, defining how the script needs to be called, by default "python"
     namespace : argparse.Namespace, optional
         If provided the internal argument parser will populate this, by default None
     args : List[str], optional
-        A list of arguments to parse, by default sys.argv will be used, by default None
+        A list of arguments to parse, by default None (sys.argv will be used)
+    kwargs : keyword argumentds
+        Will be passed along to the internal ArgumentParser.
 
     Returns
     -------
@@ -257,7 +257,7 @@ def parse_docker_args(
     action_factory.run_command.append(str(scriptname.mount_path))
 
     # create a minimal argument parser based on the action factory's action
-    parser = argparse.ArgumentParser(add_help=False)
+    parser = argparse.ArgumentParser(**kwargs)
     for argument in args_list:
         # we need to remove option string and make sure it is a list
         option_strings = argument.pop("option_strings")
