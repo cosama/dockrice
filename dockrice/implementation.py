@@ -111,6 +111,16 @@ class DockerPath(type(pathlib.Path())):
         return f"{source}:{target}:{access_rights}"
 
 
+# This works because the order argparse performs tasks is as follows:
+#    1) Apply type (grab definition from Action.type)
+#    2) Check choices (grab definition from Action.choices)
+#    3) call action (__call__)
+#    4) add default for those not in namespace
+# The goal of this is to not do the first two, by removing the type and choices
+# in the action __init__ method, but then perfrom them manually in the the
+# action call method, when recursively parsing all provided values. So the final
+# namespace will be identical to the one argparse would be creating, but we have
+# access to the proper option strings and unaltered arguments in __call__.
 class DockerActionFactory:
 
     select = {
@@ -131,50 +141,10 @@ class DockerActionFactory:
         self.mounts = []
         self.run_command = []
 
-    def _recursive_resolve_args(
-        self,
-        parse_value,
-        option_string=None,
-        mount_parent=None,
-        read_only=False,
-        mount_path=None,
-    ):
-        if option_string is not None:
-            self.run_command.append(option_string)
+    def __call__(factory_self, action=None):
 
-        if isinstance(parse_value, (list, tuple)):
-            ret_value = parse_value.__class__()
-            for v in parse_value:
-                ret_value.append(
-                    self._recursive_resolve_args(
-                        v,
-                        mount_parent=mount_parent,
-                        read_only=read_only,
-                        mount_path=mount_path,
-                    )
-                )
-            return ret_value
-
-        if isinstance(parse_value, pathlib.PurePath):
-            if not isinstance(parse_value, DockerPath):
-                ret_value = DockerPath(
-                    parse_value,
-                    mount_parent=mount_parent,
-                    read_only=read_only,
-                    mount_path=mount_path,
-                )
-            else:
-                ret_value = parse_value
-            self.run_command.append(str(ret_value.mount_path))
-            self.mounts.append(ret_value.get_mount())
-        else:
-            self.run_command.append(str(parse_value))
-            ret_value = parse_value
-
-        return ret_value
-
-    def new_action(factory_self, action="store"):
-
+        if action == None:
+            action = "store"
         if isinstance(action, str):
             action = getattr(argparse, factory_self.select[action])
 
@@ -183,20 +153,58 @@ class DockerActionFactory:
             run_command = factory_self.run_command
 
             def __init__(self, *args, **kwargs):
-                self.mount_parent = kwargs.pop("mount_parent", None)
-                self.read_only = kwargs.pop("read_only", False)
-                self.mount_path = kwargs.pop("mount_path", None)
+                self._type_kwargs = {}
+                # here we postpone the type conversion and choice checking
+                self._hidden_type = kwargs.pop("type", None)
+                self._hidden_choices = kwargs.pop("choices", None)
+
+                # here we convert any Path like object to a DockerPath and
+                # enable additional kwargs for that one
+                if self._hidden_type is not None and issubclass(
+                    self._hidden_type, pathlib.PurePath
+                ):
+                    self._type_kwargs = {
+                        key: kwargs.pop(key)
+                        for key in ["mount_parent", "read_only", "mount_path"]
+                        if key in kwargs
+                    }
+                    self._hidden_type = DockerPath
+
                 super().__init__(*args, **kwargs)
 
             def __call__(self, parser, namespace, values, option_string=None):
-                factory_self._recursive_resolve_args(
-                    values,
-                    option_string=option_string,
-                    mount_parent=self.mount_parent,
-                    read_only=self.read_only,
-                    mount_path=self.mount_path,
+                # this is only called if the option_string was present in args
+                if option_string is not None:
+                    self.run_command.append(option_string)
+                values = self._recursive_resolve_args(
+                    values, option_string=option_string
                 )
                 super().__call__(parser, namespace, values, option_string=option_string)
+
+            def _recursive_resolve_args(self, parse_value, option_string=None):
+                if isinstance(parse_value, list):
+                    ret_value = []
+                    for v in parse_value:
+                        ret_value.append(
+                            self._recursive_resolve_args(v, option_string=option_string)
+                        )
+                    return ret_value
+                # here we do the type conversion and choice checking
+                ret_value = self._hidden_type(parse_value, **self._type_kwargs)
+                if (
+                    self._hidden_choices is not None
+                    and ret_value not in self._hidden_choices
+                ):
+                    raise argparse.ArgumentError(
+                        self,
+                        f"invalid choice: {ret_value} (choose from {self._hidden_choices})",
+                    )
+                if isinstance(ret_value, DockerPath):
+                    self.run_command.append(str(ret_value.mount_path))
+                    self.mounts.append(ret_value.get_mount())
+                else:
+                    self.run_command.append(parse_value)
+                return ret_value
 
         return DockerAction
 
@@ -204,9 +212,9 @@ class DockerActionFactory:
 def parse_docker_args(
     scriptname: Union[PathLike, DockerPath],
     args_list: List[Dict[str, Any]],
-    prefix: Union[str, None]="python",
-    namespace: argparse.Namespace=None,
-    args: List[str]=None
+    prefix: Union[str, None] = "python",
+    namespace: argparse.Namespace = None,
+    args: List[str] = None,
 ) -> Tuple[List[str], List[docker.types.Mount]]:
     """parse arguments to populate a run command and a docker Mount list.
 
@@ -251,36 +259,23 @@ def parse_docker_args(
     # create a minimal argument parser based on the action factory's action
     parser = argparse.ArgumentParser(add_help=False)
     for argument in args_list:
-        if isinstance(argument["option_strings"], str):
-            option_strings = [argument["option_strings"]]
-        else:
-            option_strings = argument["option_strings"]
+        # we need to remove option string and make sure it is a list
+        option_strings = argument.pop("option_strings")
+        if isinstance(option_strings, str):
+            option_strings = [option_strings]
+        # then we replace the action with the one from the action factory
+        argument["action"] = action_factory(argument.pop("action", None))
+        # and we add the arguments
+        parser.add_argument(*option_strings, **argument)
 
-        argument_kwargs = {}
-        # some actions have different default nargs, so we add the action
-        if "action" in argument:
-            argument_kwargs["action"] = action_factory.new_action(argument["action"])
-        else:
-            argument_kwargs["action"] = action_factory.new_action()
-        if "type" in argument and issubclass(
-            argument["type"], (pathlib.PurePath, DockerPath)
-        ):
-            argument_kwargs["type"] = argument["type"]
-        if "nargs" in argument:
-            argument_kwargs["nargs"] = argument["nargs"]
-        argument_kwargs["mount_parent"] = argument.pop("mount_parent", None)
-        argument_kwargs["read_only"] = argument.pop("read_only", False)
-        argument_kwargs["mount_path"] = argument.pop("mount_path", None)
-
-        parser.add_argument(*option_strings, **argument_kwargs)
-
-    # run the parser and populate the action factory
+    # run the parser and populate the action factory. FIXME: use parse_args?
     unknown_args = parser.parse_known_args(args=args, namespace=namespace)[1]
 
     # add unknown arguments, FIXME: is it okay to add them to the end?
     action_factory.run_command.extend(unknown_args)
 
     return action_factory.run_command, action_factory.mounts
+
 
 def run_in_docker(
     docker_image: str,
@@ -290,11 +285,7 @@ def run_in_docker(
     **kwargs,
 ):
 
-    run_command, mounts = parse_docker_args(
-        scriptname,
-        args_list,
-        prefix=prefix
-    )
+    run_command, mounts = parse_docker_args(scriptname, args_list, prefix=prefix)
 
     # run the docker
     client = docker.from_env()
