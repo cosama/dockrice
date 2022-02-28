@@ -111,6 +111,27 @@ class DockerPath(type(pathlib.Path())):
         return f"{source}:{target}:{access_rights}"
 
 
+class DockerPathFactory:
+
+    def __init__(
+        self,
+        mount_path: PathLike = None,
+        read_only: bool = False,
+        mount_parent: Union[bool, None] = None
+    ):
+        self.mount_path = mount_path
+        self.read_only = read_only
+        self.mount_parent = mount_parent
+
+    def __call__(self, *path):
+        return DockerPath(
+            *path,
+            mount_path=self.mount_path,
+            read_only=self.read_only,
+            mount_parent=self.mount_parent
+        )
+
+
 # This works because the order argparse performs tasks is as follows:
 #    1) Apply type (grab definition from Action.type)
 #    2) Check choices (grab definition from Action.choices)
