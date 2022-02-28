@@ -1,3 +1,5 @@
+# Copyright (C) 2021 Marco Salathe (www.github.com/cosama/)
+
 import pathlib
 import uuid
 from docker.types import Mount
@@ -112,7 +114,8 @@ class DockerPath(type(pathlib.Path())):
 
 
 class DockerPathFactory:
-
+    """Simple class to  be used with argparsers
+    """
     def __init__(
         self,
         mount_path: PathLike = None,
