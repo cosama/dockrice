@@ -114,13 +114,13 @@ class DockerPath(type(pathlib.Path())):
 
 
 class DockerPathFactory:
-    """Simple class to  be used with argparsers
-    """
+    """Simple class to  be used with argparsers"""
+
     def __init__(
         self,
         mount_path: PathLike = None,
         read_only: bool = False,
-        mount_parent: Union[bool, None] = None
+        mount_parent: Union[bool, None] = None,
     ):
         self.mount_path = mount_path
         self.read_only = read_only
@@ -131,7 +131,7 @@ class DockerPathFactory:
             *path,
             mount_path=self.mount_path,
             read_only=self.read_only,
-            mount_parent=self.mount_parent
+            mount_parent=self.mount_parent,
         )
 
 
@@ -177,23 +177,9 @@ class DockerActionFactory:
             run_command = factory_self.run_command
 
             def __init__(self, *args, **kwargs):
-                self._type_kwargs = {}
                 # here we postpone the type conversion and choice checking
                 self._hidden_type = kwargs.pop("type", None)
                 self._hidden_choices = kwargs.pop("choices", None)
-
-                # here we convert any Path like object to a DockerPath and
-                # enable additional kwargs for that one
-                if self._hidden_type is not None and issubclass(
-                    self._hidden_type, pathlib.PurePath
-                ):
-                    self._type_kwargs = {
-                        key: kwargs.pop(key)
-                        for key in ["mount_parent", "read_only", "mount_path"]
-                        if key in kwargs
-                    }
-                    self._hidden_type = DockerPath
-
                 super().__init__(*args, **kwargs)
 
             def __call__(self, parser, namespace, values, option_string=None):
@@ -214,7 +200,7 @@ class DockerActionFactory:
                         )
                     return ret_value
                 # here we do the type conversion and choice checking
-                ret_value = self._hidden_type(parse_value, **self._type_kwargs)
+                ret_value = self._hidden_type(parse_value)
                 if (
                     self._hidden_choices is not None
                     and ret_value not in self._hidden_choices
@@ -223,6 +209,9 @@ class DockerActionFactory:
                         self,
                         f"invalid choice: {ret_value} (choose from {self._hidden_choices})",
                     )
+                # here we convert any Path like object to a DockerPath
+                if isinstance(ret_value, pathlib.PurePath) and not isinstance(ret_value, DockerPath):
+                    ret_value = DockerPath(ret_value)
                 if isinstance(ret_value, DockerPath):
                     self.run_command.append(str(ret_value.mount_path))
                     self.mounts.append(ret_value.get_mount())
@@ -239,7 +228,7 @@ def parse_docker_args(
     prefix: Union[str, None] = "python",
     namespace: argparse.Namespace = None,
     args: List[str] = None,
-    **kwargs
+    **kwargs,
 ) -> Tuple[List[str], List[docker.types.Mount]]:
     """parse arguments to populate a run command and a docker Mount list.
 
