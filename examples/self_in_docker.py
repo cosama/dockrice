@@ -5,48 +5,53 @@ import sys
 
 check_name = "AM_I_IN_A_DOCKER"
 
-parser_arguments = [
-    dict(
-        option_strings="--bool-flag",
-        help="A boolean flag.",
-        action="store_true",
-    ),
-    dict(
-        option_strings="--int-flag",
-        help="A integer.",
-        default=None,
-        type=int
-    ),
-    dict(
-        option_strings="output_files",
-        help="A bunch of files to write data to",
-        type=pathlib.Path,
-        nargs="+",
-    ),
-]
+
+parser = argparse.ArgumentParser(
+    description="A simple example of running a script in docker."
+)
 
 if os.getenv(check_name, None) is None:
-    from dockrice import run_in_docker
+    from dockrice import DockerActionFactory
 
-    container = run_in_docker(
-        docker_image="python",
-        scriptname=__file__,
-        args_list=parser_arguments,
+    action_factory = DockerActionFactory(scriptname=__file__)
+else:
+
+    def action_factory(action):
+        return action
+
+
+parser.add_argument(
+    "--bool-flag", help="A boolean flag.", action=action_factory("store_true")
+)
+parser.add_argument(
+    "--int-flag", help="A integer.", default=None, type=int, action=action_factory(None)
+),
+parser.add_argument(
+    "output_files",
+    help="A bunch of files to write data to",
+    type=pathlib.Path,
+    nargs="+",
+    action=action_factory(None),
+)
+
+args = parser.parse_args()
+
+if os.getenv(check_name, None) is None:
+    import docker
+
+    # run the docker container
+    client = docker.from_env()
+    container = client.containers.run(
+        "python",
+        action_factory.run_command,
         environment={check_name: ""},
-        detach=True
+        detach=True,
+        mounts=action_factory.mounts,
     )
     for line in container.logs(stream=True):
         print(line.decode("ASCII").strip())
     sys.exit()
 
-parser = argparse.ArgumentParser(
-    description="A simple example of running a script in docker."
-)
-for argument in parser_arguments:
-    option_string = argument.pop("option_strings")
-    parser.add_argument(option_string, **argument)
-
-args = parser.parse_args()
 
 for fname in args.output_files:
     with open(fname, "w") as ofile:

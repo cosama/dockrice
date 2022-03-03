@@ -161,9 +161,18 @@ class DockerActionFactory:
         "extend": "_ExtendAction",
     }
 
-    def __init__(self):
+    def __init__(self, scriptname=None, prefix="python"):
         self.mounts = []
         self.run_command = []
+
+        if prefix is not None:
+            self.run_command.append(prefix)
+
+        if scriptname is not None:
+            if not isinstance(scriptname, DockerPath):
+                scriptname = DockerPath(scriptname, mount_parent=True, read_only=True)
+            self.mounts.append(scriptname.get_mount())
+            self.run_command.append(str(scriptname.mount_path))
 
     def __call__(factory_self, action=None):
 
@@ -210,7 +219,9 @@ class DockerActionFactory:
                         f"invalid choice: {ret_value} (choose from {self._hidden_choices})",
                     )
                 # here we convert any Path like object to a DockerPath
-                if isinstance(ret_value, pathlib.PurePath) and not isinstance(ret_value, DockerPath):
+                if isinstance(ret_value, pathlib.PurePath) and not isinstance(
+                    ret_value, DockerPath
+                ):
                     ret_value = DockerPath(ret_value)
                 if isinstance(ret_value, DockerPath):
                     self.run_command.append(str(ret_value.mount_path))
