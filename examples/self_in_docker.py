@@ -1,4 +1,3 @@
-import argparse
 import pathlib
 import os
 import sys
@@ -6,52 +5,32 @@ import sys
 check_name = "AM_I_IN_A_DOCKER"
 
 
-parser = argparse.ArgumentParser(
-    description="A simple example of running a script in docker."
-)
-
 if os.getenv(check_name, None) is None:
-    from dockrice import DockerActionFactory
+    import dockrice.argparse as argparse
 
-    action_factory = DockerActionFactory(scriptname=__file__)
+    parser_kwargs = {
+        "script_name": __file__,
+        "container_name": "python",
+        "docker_kwargs": {"environment": {check_name: ""}},
+    }
 else:
+    import argparse
 
-    def action_factory(action):
-        return action
+    parser_kwargs = {}
 
-
-parser.add_argument(
-    "--bool-flag", help="A boolean flag.", action=action_factory("store_true")
+parser = argparse.ArgumentParser(
+    description="A simple example of running a script in docker.", **parser_kwargs
 )
-parser.add_argument(
-    "--int-flag", help="A integer.", default=None, type=int, action=action_factory(None)
-),
+parser.add_argument("--bool-flag", help="A boolean flag.", action="store_true")
+parser.add_argument("--int-flag", help="A integer.", default=None, type=int),
 parser.add_argument(
     "output_files",
     help="A bunch of files to write data to",
     type=pathlib.Path,
     nargs="+",
-    action=action_factory(None),
 )
 
 args = parser.parse_args()
-
-if os.getenv(check_name, None) is None:
-    import docker
-
-    # run the docker container
-    client = docker.from_env()
-    container = client.containers.run(
-        "python",
-        action_factory.run_command,
-        environment={check_name: ""},
-        detach=True,
-        mounts=action_factory.mounts,
-    )
-    for line in container.logs(stream=True):
-        print(line.decode("ASCII").strip())
-    sys.exit()
-
 
 for fname in args.output_files:
     with open(fname, "w") as ofile:

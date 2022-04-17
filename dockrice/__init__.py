@@ -1,11 +1,10 @@
-from .implementation import (
+from .dockerpath import (
     DockerPath,
     DockerPathFactory,
-    DockerActionFactory,
 )
+
 
 __all__ = [
     "DockerPath",
-    "DockerActionFactory",
     "DockerPathFactory",
 ]
