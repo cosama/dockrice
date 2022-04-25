@@ -41,7 +41,7 @@ class DockerActionFactory:
         self.mounts = []
         self.run_command = []
         self.container_name = container_name
-        self.docker_kwargs = docker_kwargs
+        self.docker_kwargs = docker_kwargs if docker_kwargs is not None else {}
 
         self._user_callback = user_callback
 
@@ -115,12 +115,9 @@ class DockerActionFactory:
 
     def run_docker(self, args=None, unknown_args=None):
         if self._user_callback is not None:
-            self.run_command, self.mounts, kwargs = self._user_callback(
-                self, args=args, unknowns_args=unknown_args
+            self._user_callback(
+                self, args=args, unknown_args=unknown_args
             )
-            self.docker_kwargs.update(kwargs)
-        else:
-            kwargs = {}
 
         if self.container_name is None:
             raise ValueError(
@@ -128,10 +125,18 @@ class DockerActionFactory:
                 "This is required for a docker to run"
             )
 
-        # run the docker container
+        # create docker client
         client = docker.from_env()
+
+        #download image if not already present
+        try:
+            image = client.images.get(self.container_name)
+        except docker.errors.ImageNotFound:
+            image = client.images.pull(self.container_name)
+
+        # run the docker container
         container = client.containers.run(
-            self.container_name,
+            image,
             self.run_command,
             detach=True,
             mounts=self.mounts,
