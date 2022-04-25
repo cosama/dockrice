@@ -4,11 +4,18 @@ import pathlib
 import uuid
 from docker.types import Mount
 from typing import Union, Tuple
+from enum import Enum
 
 PathLike = Union[pathlib.PurePath, str]
 
+class DefaultMountOption(Enum):
+    random = 0
+    host = 1
 
 class DockerPath(type(pathlib.Path())):
+
+    default_mount = DefaultMountOption.random
+
     def __new__(
         cls,
         *args,
@@ -76,10 +83,13 @@ class DockerPath(type(pathlib.Path())):
     @property
     def mount_path(self: PathLike) -> pathlib.PurePath:
         if self._mount_path is None:
-            if self._mount_parent:
-                return pathlib.PosixPath("/temp", self._default_mount_uuid, self.name)
-            return pathlib.PosixPath("/temp", self._default_mount_uuid + self.suffix)
-        if self._mount_parent:
+            if DockerPath.default_mount == DefaultMountOption.random:
+                if self.mount_parent:
+                    return pathlib.PosixPath("/temp", self._default_mount_uuid, self.name)
+                return pathlib.PosixPath("/temp", self._default_mount_uuid + self.suffix)
+            if DockerPath.default_mount == DefaultMountOption.host:
+                return pathlib.PosixPath(self.resolve(strict=False))
+        if self.mount_parent:
             return pathlib.PosixPath(self._mount_path, self.name)
         return self._mount_path
 
@@ -95,7 +105,7 @@ class DockerPath(type(pathlib.Path())):
         self._mount_path = path
 
     def _get_target_source(self) -> Tuple[pathlib.PurePath]:
-        if self._mount_parent:
+        if self.mount_parent:
             target = self.mount_path.parent
             source = self.parent
         else:
