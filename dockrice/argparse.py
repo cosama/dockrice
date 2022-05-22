@@ -2,6 +2,8 @@ from .dockerpath import DockerPath, DockerPathFactory
 import argparse
 import pathlib
 import docker
+import sys
+from .utils import get_image
 
 
 # This works because the order argparse performs tasks is as follows:
@@ -115,9 +117,7 @@ class DockerActionFactory:
 
     def run_docker(self, args=None, unknown_args=None):
         if self._user_callback is not None:
-            self._user_callback(
-                self, args=args, unknown_args=unknown_args
-            )
+            self._user_callback(self, args=args, unknown_args=unknown_args)
 
         if self.container_name is None:
             raise ValueError(
@@ -128,11 +128,8 @@ class DockerActionFactory:
         # create docker client
         client = docker.from_env()
 
-        #download image if not already present
-        try:
-            image = client.images.get(self.container_name)
-        except docker.errors.ImageNotFound:
-            image = client.images.pull(self.container_name)
+        # download image if not already present
+        image = get_image(self.container_name, client)
 
         # run the docker container
         container = client.containers.run(
@@ -144,7 +141,8 @@ class DockerActionFactory:
         )
         for line in container.logs(stream=True):
             print(line.decode("utf-8").strip())
-        exit()
+
+        sys.exit(container.wait()["StatusCode"])
 
 
 class ArgumentParser(argparse.ArgumentParser):

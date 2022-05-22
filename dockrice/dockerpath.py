@@ -8,9 +8,11 @@ from enum import Enum
 
 PathLike = Union[pathlib.PurePath, str]
 
+
 class DefaultMountOption(Enum):
     random = 0
     host = 1
+
 
 class DockerPath(type(pathlib.Path())):
 
@@ -85,8 +87,12 @@ class DockerPath(type(pathlib.Path())):
         if self._mount_path is None:
             if DockerPath.default_mount == DefaultMountOption.random:
                 if self.mount_parent:
-                    return pathlib.PosixPath("/temp", self._default_mount_uuid, self.name)
-                return pathlib.PosixPath("/temp", self._default_mount_uuid + self.suffix)
+                    return pathlib.PosixPath(
+                        "/temp", self._default_mount_uuid, self.name
+                    )
+                return pathlib.PosixPath(
+                    "/temp", self._default_mount_uuid + self.suffix
+                )
             if DockerPath.default_mount == DefaultMountOption.host:
                 return pathlib.PosixPath(self.resolve(strict=False))
         if self.mount_parent:
