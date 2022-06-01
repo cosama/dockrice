@@ -3,7 +3,7 @@ import argparse
 import pathlib
 import docker
 import sys
-from .utils import get_image
+from .utils import get_image, run_image
 
 
 # This works because the order argparse performs tasks is as follows:
@@ -132,17 +132,14 @@ class DockerActionFactory:
         image = get_image(self.container_name, client)
 
         # run the docker container
-        container = client.containers.run(
+        return run_image(
             image,
             self.run_command,
+            client=client,
             detach=True,
             mounts=self.mounts,
-            **self.docker_kwargs,
+            **self.docker_kwargs
         )
-        for line in container.logs(stream=True):
-            print(line.decode("utf-8").strip())
-
-        sys.exit(container.wait()["StatusCode"])
 
 
 class ArgumentParser(argparse.ArgumentParser):
