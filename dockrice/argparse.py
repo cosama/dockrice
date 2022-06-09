@@ -1,8 +1,8 @@
-from .dockerpath import DockerPath, DockerPathFactory
 import argparse
+import sys
 import pathlib
 import docker
-import sys
+from .dockerpath import DockerPath, DockerPathFactory
 from .utils import get_image, run_image
 
 
@@ -138,7 +138,7 @@ class DockerActionFactory:
             client=client,
             detach=True,
             mounts=self.mounts,
-            **self.docker_kwargs
+            **self.docker_kwargs,
         )
 
 
@@ -159,12 +159,11 @@ class ArgumentParser(argparse.ArgumentParser):
         )
         super().add_argument(*args, **kwargs)
 
-    def parse_args(self, *args, **kwargs):
-        args = super().parse_args(*args, **kwargs)
-        self._docker_action_factory.run_docker(args=args)
-        return args
-
+    # Wo only overwrite parse_known_args parse_args is calling
+    # parse_known args internally
     def parse_known_args(self, *args, **kwargs):
         args, unknown_args = super().parse_known_args(*args, **kwargs)
-        self._docker_action_factory.run_docker(args=args, unknown_args=unknown_args)
+        sys.exit(
+            self._docker_action_factory.run_docker(args=args, unknown_args=unknown_args)
+        )
         return args, unknown_args

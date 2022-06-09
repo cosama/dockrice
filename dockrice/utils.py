@@ -75,27 +75,35 @@ class KillContainerOnInterrupt:
 
     CATCHABLE_SIGNALS = set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP}
 
-    def __enter__(self, image, cmd, client=None, **kwargs):
+    def __init__(self, image, cmd, client=None, **kwargs):
+        """
+        Replaces default signal handlers with _handler, so that it doesn't
+        immediately kill the program.
+        """
+        self.container = None
+        self.image = image
+        self.cmd = cmd
+        self.kwargs = kwargs
+        if client is None:
+            # create docker client
+            client = docker.from_env()
+        self.client = client
+        self._old_handlers = {}
+
+    def __enter__(self):
         """
         Replaces default signal handlers with _handler, so that it doesn't
         immediately kill the program.
         """
 
-        self.container = None
-
-        self._old_handlers = {}
         for sig in self.CATCHABLE_SIGNALS:
             self._old_handlers[sig] = signal.signal(sig, self._handler)
 
-        if client is None:
-            # create docker client
-            client = docker.from_env()
-
         # run the docker container
-        self.container = client.containers.run(
-            image,
-            cmd,
-            **kwargs,
+        self.container = self.client.containers.run(
+            self.image,
+            self.cmd,
+            **self.kwargs,
         )
 
         return self.container
@@ -115,9 +123,7 @@ class KillContainerOnInterrupt:
             signal.signal(sig, signal.SIG_DFL)
             os.kill(os.getpid(), sig)
 
-    def __exit__(
-        self, exc_type, exc_value, exc_traceback
-    ):
+    def __exit__(self, exc_type, exc_value, exc_traceback):
         """
         Function resets the signal handlers back to default.
         """
