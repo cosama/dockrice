@@ -96,7 +96,9 @@ class DockerPath(type(pathlib.Path())):
             if DockerPath.default_mount == DefaultMountOption.host:
                 return pathlib.PosixPath(self.resolve(strict=False))
         if self.mount_parent:
-            return pathlib.PosixPath(self._mount_path, self.name)
+            assert (
+                self._mount_path.name == self.name
+            ), "Can not mount parent if mount_path basename is not host basename."
         return self._mount_path
 
     @mount_path.setter

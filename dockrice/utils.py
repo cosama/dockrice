@@ -6,7 +6,7 @@ import os
 
 def get_image(
     image_name: str,
-    client: docker.DockerClient,
+    client: docker.DockerClient = None,
     try_pull: bool = True,
     try_login: bool = True,
 ):
@@ -34,6 +34,10 @@ def get_image(
     docker.Image:
         The requested image
     """
+
+    if client is None:
+        # create docker client
+        client = docker.from_env()
 
     # TODO: We could try to use tqdm for pull status
     try:
@@ -80,6 +84,11 @@ class KillContainerOnInterrupt:
         Replaces default signal handlers with _handler, so that it doesn't
         immediately kill the program.
         """
+        detach = kwargs.pop("detach", True)
+        if detach is False:
+            print(
+                "WARNING: Requires container to be detached, 'detach' will be ignored."
+            )
         self.container = None
         self.image = image
         self.cmd = cmd
@@ -103,6 +112,7 @@ class KillContainerOnInterrupt:
         self.container = self.client.containers.run(
             self.image,
             self.cmd,
+            detach=True,
             **self.kwargs,
         )
 
@@ -131,7 +141,7 @@ class KillContainerOnInterrupt:
             signal.signal(sig, old_handler)
 
 
-def run_image(image, cmd, client=None, **kwargs):
+def run_image(image, cmd, client=None, return_logs=False, **kwargs):
     """Run an image. Make sure it will be killed on signal interrupt.
 
     Parameters
@@ -140,14 +150,22 @@ def run_image(image, cmd, client=None, **kwargs):
         The image to run
     cmd : list or str
         The command to run in the docker
+    return_logs : bool
+        instead of writing to stdout return the log as second parameter.
     client : docker.Client, optional
         The client to use for docker, by default None (create one)
 
     Returns:
     --------
-    The containers exit code
+    The containers exit code, (the log as a list of strings)
     """
     with KillContainerOnInterrupt(image, cmd, client=None, **kwargs) as container:
+        if return_logs:
+            ret_string = [
+                line.decode("utf-8").strip() for line in container.logs(stream=True)
+            ]
+            return container.wait()["StatusCode"], ret_string
+
         for line in container.logs(stream=True):
             print(line.decode("utf-8").strip())
         return container.wait()["StatusCode"]

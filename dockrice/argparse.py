@@ -136,7 +136,6 @@ class DockerActionFactory:
             image,
             self.run_command,
             client=client,
-            detach=True,
             mounts=self.mounts,
             **self.docker_kwargs,
         )
