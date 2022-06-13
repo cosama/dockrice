@@ -9,15 +9,12 @@ from enum import Enum
 PathLike = Union[pathlib.PurePath, str]
 
 
-class DefaultMountOption(Enum):
+class MountOption(Enum):
     random = 0
     host = 1
 
 
 class DockerPath(type(pathlib.Path())):
-
-    default_mount = DefaultMountOption.random
-
     def __new__(
         cls,
         *args,
@@ -29,21 +26,24 @@ class DockerPath(type(pathlib.Path())):
     def __init__(
         self,
         *path,
-        mount_path: PathLike = None,
+        mount_path: Union[PathLike, MountOption] = MountOption.host,
         read_only: bool = False,
         mount_parent: Union[bool, None] = None,
     ) -> None:
-        """Create a DockerPath object.
+        """Create a DockerPath object. DockerPath objects are immutable.
 
         Parameters
         ----------
         path: PathLike (identical to pathlib.Path creator)
             The host path.
-        mount_path : PathLike, optional
-            The path inside the docker container, by default None, e.g.
-            created by a uuid + path.suffix. CAUTION: If 'mount_parent' is true,
-            this will be the parent path and path.name will be appended, otherwise
-            this will be the full path.
+        mount_path : [PathLike, MountOption], optional
+            The path inside the docker container, CAUTION: If 'mount_parent' is true,
+            this will be the parent path and path.name will be appended.
+            There are two ways to automatically define the mount_path:
+                MountOption.host:   Use the host path as mount_path.
+                                    This might not work in all situations
+                MountOption.random: Created as /temp/ + uuid + /path.name.
+                                    This is safer and will always work.
         read_only : bool, optional
             Mount the path with read only access, by default False.
         mount_parent : Union[bool, None], optional
@@ -51,66 +51,40 @@ class DockerPath(type(pathlib.Path())):
             If None, will check if the path exist, if it does, this is set to False,
             if not it is set to True.
         """
-        self.mount_path = mount_path
+        # print(self.resolve(strict=False))
+        if mount_path == MountOption.host:
+            mount_path = pathlib.PosixPath(self.resolve(strict=False))
+            # print(mount_path)
+        elif mount_path == MountOption.random:
+            mount_path = pathlib.PosixPath("/temp", str(uuid.uuid4()), self.name)
+        else:
+            if isinstance(mount_path, tuple):
+                mount_path = pathlib.PosixPath(*mount_path)
+            else:
+                mount_path = pathlib.PosixPath(mount_path)
+            if mount_parent is True:
+                mount_path = pathlib.PosixPath(mount_path, self.name)
+        assert mount_path.is_absolute(), "Require an absolute path for the mount path"
         if mount_parent is None:
-            if self.exists():
+            if self.resolve(strict=False).exists():
                 mount_parent = False
             else:
                 mount_parent = True
-        self.mount_parent = mount_parent
-        self.read_only = read_only
+        self._mount_path = mount_path
+        self._mount_parent = mount_parent
+        self._read_only = read_only
 
     @property
     def read_only(self) -> bool:
         return self._read_only
 
-    @read_only.setter
-    def read_only(self, value: bool):
-        assert value in (False, True), "read_only needs to be a boolean"
-        self._read_only = value
-
     @property
     def mount_parent(self) -> bool:
         return self._mount_parent
 
-    @mount_parent.setter
-    def mount_parent(self, value: bool):
-        assert value in (
-            False,
-            True,
-            None,
-        ), "mount_parent needs to be a boolean or None"
-        self._mount_parent = value
-
     @property
-    def mount_path(self: PathLike) -> pathlib.PurePath:
-        if self._mount_path is None:
-            if DockerPath.default_mount == DefaultMountOption.random:
-                if self.mount_parent:
-                    return pathlib.PosixPath(
-                        "/temp", self._default_mount_uuid, self.name
-                    )
-                return pathlib.PosixPath(
-                    "/temp", self._default_mount_uuid + self.suffix
-                )
-            if DockerPath.default_mount == DefaultMountOption.host:
-                return pathlib.PosixPath(self.resolve(strict=False))
-        if self.mount_parent:
-            assert (
-                self._mount_path.name == self.name
-            ), "Can not mount parent if mount_path basename is not host basename."
+    def mount_path(self) -> pathlib.PosixPath:
         return self._mount_path
-
-    @mount_path.setter
-    def mount_path(self, path: PathLike):
-        self._default_mount_uuid = str(uuid.uuid4())
-        if path is not None:
-            if isinstance(path, tuple):
-                path = pathlib.PosixPath(*path)
-            else:
-                path = pathlib.PosixPath(path)
-            assert path.is_absolute(), "Require an absolute path for the mount path"
-        self._mount_path = path
 
     def _get_target_source(self) -> Tuple[pathlib.PurePath]:
         if self.mount_parent:
@@ -141,7 +115,7 @@ class DockerPathFactory:
 
     def __init__(
         self,
-        mount_path: PathLike = None,
+        mount_path: [PathLike, MountOption] = MountOption.host,
         read_only: bool = False,
         mount_parent: Union[bool, None] = None,
     ):

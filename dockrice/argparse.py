@@ -2,7 +2,7 @@ import argparse
 import sys
 import pathlib
 import docker
-from .dockerpath import DockerPath, DockerPathFactory
+from .dockerpath import DockerPath, DockerPathFactory, MountOption
 from .utils import get_image, run_image
 
 
@@ -73,7 +73,7 @@ class DockerActionFactory:
                 self._hidden_choices = kwargs.pop("choices", None)
                 self._docker_path_factory = DockerPathFactory(
                     mount_parent=kwargs.pop("mount_parent", None),
-                    mount_path=kwargs.pop("mount_path", None),
+                    mount_path=kwargs.pop("mount_path", MountOption.host),
                     read_only=kwargs.pop("read_only", False),
                 )
                 super().__init__(*args, **kwargs)
