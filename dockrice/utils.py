@@ -162,10 +162,10 @@ def run_image(image, cmd, client=None, return_logs=False, **kwargs):
     with KillContainerOnInterrupt(image, cmd, client=None, **kwargs) as container:
         if return_logs:
             ret_string = [
-                line.decode("utf-8").strip() for line in container.logs(stream=True)
+                line.decode("utf-8") for line in container.logs(stream=True)
             ]
             return container.wait()["StatusCode"], ret_string
 
         for line in container.logs(stream=True):
-            print(line.decode("utf-8").strip())
+            print(line.decode("utf-8"), end="")
         return container.wait()["StatusCode"]
