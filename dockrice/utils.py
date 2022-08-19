@@ -47,7 +47,7 @@ def get_image(
             raise e
         try:
             print(
-                f"Trying to pull '{image_name}' from registry. Ths can take "
+                f"Trying to pull '{image_name}' from registry. This can take "
                 "a while, please be patient..."
             )
             return client.images.pull(image_name)

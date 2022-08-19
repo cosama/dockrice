@@ -108,7 +108,15 @@ class DockerActionFactory:
                     ret_value = self._docker_path_factory(ret_value)
                 if isinstance(ret_value, DockerPath):
                     self.run_command.append(str(ret_value.mount_path))
-                    self.mounts.append(ret_value.get_mount())
+                    mount = ret_value.get_mount()
+                    if mount not in self.mounts:
+                        # here we need to check if read only changed is in mounts instead
+                        mount["ReadOnly"] = not mount["ReadOnly"] 
+                        if mount in self.mounts:
+                            self.mounts[self.mounts.index(mount)]["ReadOnly"] = False
+                        else:
+                            mount["ReadOnly"] = not mount["ReadOnly"]
+                            self.mounts.append(mount)
                 else:
                     self.run_command.append(parse_value)
                 return ret_value
