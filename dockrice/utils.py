@@ -9,6 +9,7 @@ def get_image(
     client: docker.DockerClient = None,
     try_pull: bool = True,
     try_login: bool = True,
+    dockrice_verbose: bool = False,
 ):
     """Try to get an image, if it is not present try to pull it, if that
     doesn't work either try to login and pull again.
@@ -25,6 +26,8 @@ def get_image(
         by default True
     try_login : bool, optional
         If pulling from registry fails, try to login and pull again.
+    dockrice_verbose : bool, optional
+        Set increased verbosity
 
     Note: The login method is safe and doesn't store the password locally. If the
     password is in the local docker config files, it will use those.
@@ -79,7 +82,7 @@ class KillContainerOnInterrupt:
 
     CATCHABLE_SIGNALS = set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP}
 
-    def __init__(self, image, cmd, client=None, **kwargs):
+    def __init__(self, image, cmd, client=None, dockrice_verbose=False, **kwargs):
         """
         Replaces default signal handlers with _handler, so that it doesn't
         immediately kill the program.
@@ -93,6 +96,7 @@ class KillContainerOnInterrupt:
         self.image = image
         self.cmd = cmd
         self.kwargs = kwargs
+        self.dockrice_verbose = dockrice_verbose
         if client is None:
             # create docker client
             client = docker.from_env()
@@ -109,6 +113,11 @@ class KillContainerOnInterrupt:
             self._old_handlers[sig] = signal.signal(sig, self._handler)
 
         # run the docker container
+        if self.dockrice_verbose is True:
+            print("Running container:")
+            print(f"    Image: {self.image}")
+            print(f"    Command: {self.cmd}")
+            print(f"    Kwargs: {self.kwargs}")
         self.container = self.client.containers.run(
             self.image,
             self.cmd,
@@ -161,9 +170,7 @@ def run_image(image, cmd, client=None, return_logs=False, **kwargs):
     """
     with KillContainerOnInterrupt(image, cmd, client=None, **kwargs) as container:
         if return_logs:
-            ret_string = [
-                line.decode("utf-8") for line in container.logs(stream=True)
-            ]
+            ret_string = [line.decode("utf-8") for line in container.logs(stream=True)]
             return container.wait()["StatusCode"], ret_string
 
         for line in container.logs(stream=True):

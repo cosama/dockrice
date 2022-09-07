@@ -39,11 +39,13 @@ class DockerActionFactory:
         run_command=["python"],
         user_callback=None,
         docker_kwargs=None,
+        dockrice_verbose=False,
     ):
         self.mounts = []
         self.run_command = []
         self.container_name = container_name
         self.docker_kwargs = docker_kwargs if docker_kwargs is not None else {}
+        self.dockrice_verbose = dockrice_verbose
 
         self._user_callback = user_callback
 
@@ -80,6 +82,10 @@ class DockerActionFactory:
 
             def __call__(self, parser, namespace, values, option_string=None):
                 # this is only called if the option_string was present in args
+                if option_string == "--dockrice-verbose":
+                    factory_self.dockrice_verbose = True
+                    delattr(namespace, "dockrice_verbose")
+                    return
                 if option_string is not None:
                     self.run_command.append(option_string)
                 values = self._recursive_resolve_args(values)
@@ -111,7 +117,7 @@ class DockerActionFactory:
                     mount = ret_value.get_mount()
                     if mount not in self.mounts:
                         # here we need to check if read only changed is in mounts instead
-                        mount["ReadOnly"] = not mount["ReadOnly"] 
+                        mount["ReadOnly"] = not mount["ReadOnly"]
                         if mount in self.mounts:
                             self.mounts[self.mounts.index(mount)]["ReadOnly"] = False
                         else:
@@ -137,7 +143,9 @@ class DockerActionFactory:
         client = docker.from_env()
 
         # download image if not already present
-        image = get_image(self.container_name, client)
+        image = get_image(
+            self.container_name, client, dockrice_verbose=self.dockrice_verbose
+        )
 
         # run the docker container
         return run_image(
@@ -146,6 +154,7 @@ class DockerActionFactory:
             client=client,
             mounts=self.mounts,
             **self.docker_kwargs,
+            dockrice_verbose=self.dockrice_verbose,
         )
 
 
@@ -159,6 +168,11 @@ class ArgumentParser(argparse.ArgumentParser):
             docker_kwargs=kwargs.pop("docker_kwargs", None),
         )
         super().__init__(*args, **kwargs)
+        self.add_argument(
+            "--dockrice-verbose",
+            help="Increases verbosity of dockrice.",
+            action="store_true",
+        )
 
     def add_argument(self, *args, **kwargs):
         kwargs["action"] = self._docker_action_factory(
@@ -170,7 +184,10 @@ class ArgumentParser(argparse.ArgumentParser):
     # parse_known args internally
     def parse_known_args(self, *args, **kwargs):
         args, unknown_args = super().parse_known_args(*args, **kwargs)
+        if self._docker_action_factory.dockrice_verbose:
+            print("Dockrice ArgumentParser:")
+            print(f"    Parsed args: {args}")
+            print(f"    Unknown args: {unknown_args}")
         sys.exit(
             self._docker_action_factory.run_docker(args=args, unknown_args=unknown_args)
         )
-        return args, unknown_args
