@@ -80,7 +80,10 @@ class KillContainerOnInterrupt:
     A context handler that always runs the given function on interrupt.
     """
 
-    CATCHABLE_SIGNALS = set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP}
+    try:
+        CATCHABLE_SIGNALS = set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP}
+    except AttributeError:
+        CATCHABLE_SIGNALS = set(signal.Signals) - {signal.CTRL_C_EVENT, signal.CTRL_BREAK_EVENT}
 
     def __init__(self, image, cmd, client=None, dockrice_verbose=False, **kwargs):
         """

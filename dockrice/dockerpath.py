@@ -53,18 +53,22 @@ class DockerPath(type(pathlib.Path())):
         """
         # print(self.resolve(strict=False))
         if mount_path == MountOption.host:
-            mount_path = pathlib.PosixPath(self.resolve(strict=False))
+            mount_path = pathlib.PurePosixPath(
+                self.resolve(strict=False).as_posix().removeprefix(
+                    self.resolve(strict=False).drive
+                )
+            )
             # print(mount_path)
         elif mount_path == MountOption.random:
-            mount_path = pathlib.PosixPath("/temp", str(uuid.uuid4()), self.name)
+            mount_path = pathlib.PurePosixPath("/temp", str(uuid.uuid4()), self.name)
         else:
             if isinstance(mount_path, tuple):
-                mount_path = pathlib.PosixPath(*mount_path)
+                mount_path = pathlib.PurePosixPath(*mount_path)
             else:
-                mount_path = pathlib.PosixPath(mount_path)
+                mount_path = pathlib.PurePosixPath(mount_path)
             if mount_parent is True:
-                mount_path = pathlib.PosixPath(mount_path, self.name)
-        assert mount_path.is_absolute(), "Require an absolute path for the mount path"
+                mount_path = pathlib.PurePosixPath(mount_path, self.name)
+        assert mount_path.is_absolute(), f"Require an absolute path for the mount path. Is '{mount_path}'."
         if mount_parent is None:
             if self.resolve(strict=False).exists():
                 mount_parent = False
@@ -83,7 +87,7 @@ class DockerPath(type(pathlib.Path())):
         return self._mount_parent
 
     @property
-    def mount_path(self) -> pathlib.PosixPath:
+    def mount_path(self) -> pathlib.PurePosixPath:
         return self._mount_path
 
     def _get_target_source(self) -> Tuple[pathlib.PurePath]:
