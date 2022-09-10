@@ -53,10 +53,12 @@ class DockerPath(type(pathlib.Path())):
         """
         # print(self.resolve(strict=False))
         if mount_path == MountOption.host:
+            # on windows self is a WindowsPath object, we need to mirror it into a
+            # path valid in posix this includes removing the drive ("C:")
             mount_path = pathlib.PurePosixPath(
-                self.resolve(strict=False).as_posix().removeprefix(
-                    self.resolve(strict=False).drive
-                )
+                self.resolve(strict=False)
+                .as_posix()
+                .removeprefix(self.resolve(strict=False).drive)
             )
             # print(mount_path)
         elif mount_path == MountOption.random:
@@ -68,7 +70,9 @@ class DockerPath(type(pathlib.Path())):
                 mount_path = pathlib.PurePosixPath(mount_path)
             if mount_parent is True:
                 mount_path = pathlib.PurePosixPath(mount_path, self.name)
-        assert mount_path.is_absolute(), f"Require an absolute path for the mount path. Is '{mount_path}'."
+        assert (
+            mount_path.is_absolute()
+        ), f"Require an absolute path for the mount path. Is '{mount_path}'."
         if mount_parent is None:
             if self.resolve(strict=False).exists():
                 mount_parent = False
