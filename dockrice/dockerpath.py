@@ -9,6 +9,10 @@ from enum import Enum
 PathLike = Union[pathlib.PurePath, str]
 
 
+def remove_prefix(string, prefix):
+    return string[(len(prefix) if string.startswith(prefix) else 0):]
+
+
 class MountOption(Enum):
     random = 0
     host = 1
@@ -56,9 +60,10 @@ class DockerPath(type(pathlib.Path())):
             # on windows self is a WindowsPath object, we need to mirror it into a
             # path valid in posix this includes removing the drive ("C:")
             mount_path = pathlib.PurePosixPath(
-                self.resolve(strict=False)
-                .as_posix()
-                .removeprefix(self.resolve(strict=False).drive)
+                remove_prefix(
+                    self.resolve(strict=False).as_posix(),
+                    self.resolve(strict=False).drive
+                )
             )
             # print(mount_path)
         elif mount_path == MountOption.random:
