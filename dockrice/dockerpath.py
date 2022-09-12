@@ -10,7 +10,7 @@ PathLike = Union[pathlib.PurePath, str]
 
 
 def remove_prefix(string, prefix):
-    return string[(len(prefix) if string.startswith(prefix) else 0):]
+    return string[(len(prefix) if string.startswith(prefix) else 0) :]
 
 
 class MountOption(Enum):
@@ -62,7 +62,7 @@ class DockerPath(type(pathlib.Path())):
             mount_path = pathlib.PurePosixPath(
                 remove_prefix(
                     self.resolve(strict=False).as_posix(),
-                    self.resolve(strict=False).drive
+                    self.resolve(strict=False).drive,
                 )
             )
             # print(mount_path)
