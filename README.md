@@ -49,7 +49,7 @@ args = parser.parse_args()
 
 This works because when the module is loaded, the environmental variable `AM_I_IN_A_DOCKER` is not defined. Thus, it uses the argparser from dockrice, with the respective parameters defined. For any file/directory that you use in your script you need an argument in the argparser with `type=pathlib.Path`. The argparser then starts a image, mounts all necessary path and runs the script in the container. The `AM_I_IN_A_DOCKER` variable is defined inside the container as it was added to the environmental variables passed to the docker run command, so it uses the normal `argparse` module and thus will run the full code without any special consideration.
 
-The above code is thus about equivalent to run
+The above code is thus about equivalent to
 
 ```
 docker run -v $LOCAL_DATA_DIR:/data my_container python my_script.py --data-dir /data

@@ -128,7 +128,7 @@ class DockerPathFactory:
 
     def __init__(
         self,
-        mount_path: [PathLike, MountOption] = MountOption.host,
+        mount_path: Union[PathLike, MountOption] = MountOption.host,
         read_only: bool = False,
         mount_parent: Union[bool, None] = None,
     ):
