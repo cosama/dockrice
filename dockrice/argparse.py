@@ -4,6 +4,7 @@ import pathlib
 import docker
 from .dockerpath import DockerPath, DockerPathFactory, MountOption
 from .utils import get_image, run_image
+import warnings
 
 
 # This works because the order argparse performs tasks is as follows:
@@ -34,16 +35,16 @@ class DockerActionFactory:
 
     def __init__(
         self,
-        script_name=None,
-        container_name=None,
+        image_name=None,
         run_command=["python"],
+        script_name=None,
         user_callback=None,
         docker_kwargs=None,
         dockrice_verbose=False,
     ):
         self.mounts = []
         self.run_command = []
-        self.container_name = container_name
+        self.image_name = image_name
         self.docker_kwargs = docker_kwargs if docker_kwargs is not None else {}
         self.dockrice_verbose = dockrice_verbose
 
@@ -52,7 +53,16 @@ class DockerActionFactory:
         if run_command is not None:
             self.run_command.extend(run_command)
 
-        if script_name is not None:
+        if script_name is None:
+            frame = sys._getframe(2)
+            if frame is None:
+                raise NotImplementedError(
+                    "Can not evaluate 'script_name' automatically. "
+                    "Please provide the argument."
+                )
+            script_name = frame.f_globals["__file__"]
+
+        if script_name != "":
             if not isinstance(script_name, DockerPath):
                 script_name = DockerPath(script_name, mount_parent=True, read_only=True)
             self.mounts.append(script_name.get_mount())
@@ -133,10 +143,9 @@ class DockerActionFactory:
         if self._user_callback is not None:
             self._user_callback(self, args=args, unknown_args=unknown_args)
 
-        if self.container_name is None:
+        if self.image_name is None:
             raise ValueError(
-                "'container_name' is not defined. "
-                "This is required for a docker to run"
+                "'image_name' is not defined. " "This is required for a docker to run"
             )
 
         # create docker client
@@ -144,7 +153,7 @@ class DockerActionFactory:
 
         # download image if not already present
         image = get_image(
-            self.container_name, client, dockrice_verbose=self.dockrice_verbose
+            self.image_name, client, dockrice_verbose=self.dockrice_verbose
         )
 
         # run the docker container
@@ -160,9 +169,16 @@ class DockerActionFactory:
 
 class ArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
+        if "container_name" in kwargs:
+            assert (
+                "image_name" not in kwargs
+            ), "Use either image_name or container_name."
+            warnings.warn("container_name is deprecated, please use image_name.")
+            kwargs["image_name"] = kwargs.pop("container_name")
+
         self._docker_action_factory = DockerActionFactory(
             script_name=kwargs.pop("script_name", None),
-            container_name=kwargs.pop("container_name", None),
+            image_name=kwargs.pop("image_name", None),
             run_command=kwargs.pop("run_command", ["python"]),
             user_callback=kwargs.pop("user_callback", None),
             docker_kwargs=kwargs.pop("docker_kwargs", None),
