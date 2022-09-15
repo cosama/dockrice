@@ -2,10 +2,11 @@ import docker
 import getpass
 import signal
 import os
+from typing import Union
 
 
 def get_image(
-    image_name: str,
+    image: Union[str, docker.models.images.Image],
     client: docker.DockerClient = None,
     try_pull: bool = True,
     try_login: bool = True,
@@ -16,8 +17,9 @@ def get_image(
 
     Parameters
     ----------
-    image_name : str
+    image : str or docker.models.images.Image
         The name of the docker image (including registry prefix if not dockerhub.com)
+        or the image to be run.
     client : docker.DockerClient
         The client instant to use
 
@@ -37,6 +39,8 @@ def get_image(
     docker.Image:
         The requested image
     """
+    if isinstance(image, docker.models.images.Image):
+        return image
 
     if client is None:
         # create docker client
@@ -44,22 +48,22 @@ def get_image(
 
     # TODO: We could try to use tqdm for pull status
     try:
-        return client.images.get(image_name)
+        return client.images.get(image)
     except docker.errors.ImageNotFound as e:
         if not try_pull:
             raise e
         try:
             print(
-                f"Trying to pull '{image_name}' from registry. This can take "
+                f"Trying to pull '{image}' from registry. This can take "
                 "a while, please be patient..."
             )
-            return client.images.pull(image_name)
+            return client.images.pull(image)
         except docker.errors.APIError as e:
             if not try_login:
                 raise e
             kwargs = {}
-            if "/" in image_name:
-                registry = image_name.split("/")[0]
+            if "/" in image:
+                registry = image.split("/")[0]
             else:
                 registry = "Default"
             print(f"Can not access registry ({registry}). Try to login:")
@@ -72,7 +76,7 @@ def get_image(
                 kwargs["password"] = getpass.getpass()
                 client.login(**kwargs)
                 print("Login successful. Pulling the image...")
-                return client.images.pull(image_name)
+                return client.images.pull(image)
 
 
 class KillContainerOnInterrupt:

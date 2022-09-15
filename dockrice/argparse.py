@@ -35,7 +35,7 @@ class DockerActionFactory:
 
     def __init__(
         self,
-        image_name=None,
+        image=None,
         run_command=["python"],
         script_name=None,
         user_callback=None,
@@ -44,7 +44,7 @@ class DockerActionFactory:
     ):
         self.mounts = []
         self.run_command = []
-        self.image_name = image_name
+        self.image = image
         self.docker_kwargs = docker_kwargs if docker_kwargs is not None else {}
         self.dockrice_verbose = dockrice_verbose
 
@@ -143,18 +143,16 @@ class DockerActionFactory:
         if self._user_callback is not None:
             self._user_callback(self, args=args, unknown_args=unknown_args)
 
-        if self.image_name is None:
+        if self.image is None:
             raise ValueError(
-                "'image_name' is not defined. This is required for a docker to run."
+                "'image' is not defined. This is required for a docker to run."
             )
 
         # create docker client
         client = docker.from_env()
 
         # download image if not already present
-        image = get_image(
-            self.image_name, client, dockrice_verbose=self.dockrice_verbose
-        )
+        image = get_image(self.image, client, dockrice_verbose=self.dockrice_verbose)
 
         # run the docker container
         return run_image(
@@ -170,15 +168,13 @@ class DockerActionFactory:
 class ArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         if "container_name" in kwargs:
-            assert (
-                "image_name" not in kwargs
-            ), "Use either image_name or container_name."
-            warnings.warn("container_name is deprecated, please use image_name.")
-            kwargs["image_name"] = kwargs.pop("container_name")
+            assert "image" not in kwargs, "Use either 'image' or 'container_name'."
+            warnings.warn("'container_name' is deprecated, please use 'image'.")
+            kwargs["image"] = kwargs.pop("container_name")
 
         self._docker_action_factory = DockerActionFactory(
             script_name=kwargs.pop("script_name", None),
-            image_name=kwargs.pop("image_name", None),
+            image=kwargs.pop("image", None),
             run_command=kwargs.pop("run_command", ["python"]),
             user_callback=kwargs.pop("user_callback", None),
             docker_kwargs=kwargs.pop("docker_kwargs", None),
