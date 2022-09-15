@@ -20,9 +20,8 @@ def get_image(
     image : str or docker.models.images.Image
         The name of the docker image (including registry prefix if not dockerhub.com)
         or the image to be run.
-    client : docker.DockerClient
+    client : docker.DockerClient, optional
         The client instant to use
-
     try_pull : bool, optional
         If image is not available locally, try to pull it from the registry,
         by default True
@@ -36,7 +35,7 @@ def get_image(
 
     Returns
     -------
-    docker.Image:
+    docker.models.images.Image:
         The requested image
     """
     if isinstance(image, docker.models.images.Image):
@@ -93,7 +92,15 @@ class KillContainerOnInterrupt:
             signal.CTRL_BREAK_EVENT,
         }
 
-    def __init__(self, image, cmd, client=None, dockrice_verbose=False, **kwargs):
+    def __init__(
+        self,
+        image,
+        cmd,
+        client=None,
+        auto_remove=True,
+        dockrice_verbose=False,
+        **kwargs,
+    ):
         """
         Replaces default signal handlers with _handler, so that it doesn't
         immediately kill the program.
@@ -108,6 +115,7 @@ class KillContainerOnInterrupt:
         self.cmd = cmd
         self.kwargs = kwargs
         self.dockrice_verbose = dockrice_verbose
+        self.auto_remove = auto_remove
         if client is None:
             # create docker client
             client = docker.from_env()
@@ -159,9 +167,13 @@ class KillContainerOnInterrupt:
         """
         for sig, old_handler in self._old_handlers.items():
             signal.signal(sig, old_handler)
+        if self.auto_remove:
+            if self.dockrice_verbose is True:
+                print(f"Removing container: {self.container}.")
+            self.container.remove()
 
 
-def run_image(image, cmd, client=None, return_logs=False, **kwargs):
+def run_image(image, cmd, client=None, return_logs=False, auto_remove=True, **kwargs):
     """Run an image. Make sure it will be killed on signal interrupt.
 
     Parameters
@@ -170,16 +182,21 @@ def run_image(image, cmd, client=None, return_logs=False, **kwargs):
         The image to run
     cmd : list or str
         The command to run in the docker
-    return_logs : bool
-        instead of writing to stdout return the log as second parameter.
     client : docker.Client, optional
         The client to use for docker, by default None (create one)
+    return_logs : bool, optional
+        instead of writing to stdout return the log as second parameter
+    auto_remove : bool, optional
+        Automatically remove the container on exit. Is True by default
+
 
     Returns:
     --------
     The containers exit code, (the log as a list of strings)
     """
-    with KillContainerOnInterrupt(image, cmd, client=None, **kwargs) as container:
+    with KillContainerOnInterrupt(
+        image, cmd, client=None, auto_remove=auto_remove, **kwargs
+    ) as container:
         if return_logs:
             ret_string = [line.decode("utf-8") for line in container.logs(stream=True)]
             return container.wait()["StatusCode"], ret_string
