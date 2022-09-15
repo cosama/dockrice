@@ -145,7 +145,7 @@ class DockerActionFactory:
 
         if self.image_name is None:
             raise ValueError(
-                "'image_name' is not defined. " "This is required for a docker to run"
+                "'image_name' is not defined. This is required for a docker to run."
             )
 
         # create docker client
