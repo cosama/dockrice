@@ -9,8 +9,7 @@ if os.getenv(check_name, None) is None:
     import dockrice.argparse as argparse
 
     parser_kwargs = {
-        "script_name": __file__,
-        "container_name": "python",
+        "image": "python",
         "docker_kwargs": {"environment": {check_name: ""}},
     }
 else:
