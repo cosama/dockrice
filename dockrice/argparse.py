@@ -202,8 +202,8 @@ class ArgumentParser(argparse.ArgumentParser):
             print(f"    Parsed args: {args}")
             print(f"    Unknown args: {unknown_args}")
         if self._raise_on_unknown and unknown_args:
-            msg = ('unrecognized arguments: %s')
-            self.error(msg % ' '.join(unknown_args))
+            msg = "unrecognized arguments: %s"
+            self.error(msg % " ".join(unknown_args))
         self._raise_on_unknown = False
         sys.exit(
             self._docker_action_factory.run_docker(args=args, unknown_args=unknown_args)
