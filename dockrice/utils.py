@@ -170,7 +170,7 @@ class KillContainerOnInterrupt:
         if self.auto_remove:
             if self.dockrice_verbose is True:
                 print(f"Removing container: {self.container}.")
-            self.container.remove()
+            self.container.remove(force=True)
 
 
 def run_image(image, cmd, client=None, return_logs=False, auto_remove=True, **kwargs):
@@ -202,5 +202,5 @@ def run_image(image, cmd, client=None, return_logs=False, auto_remove=True, **kw
             return container.wait()["StatusCode"], ret_string
 
         for line in container.logs(stream=True):
-            print(line.decode("utf-8"), end="")
+            print(line.decode("utf-8"), end="", flush=True)
         return container.wait()["StatusCode"]

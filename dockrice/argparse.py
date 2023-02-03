@@ -179,6 +179,7 @@ class ArgumentParser(argparse.ArgumentParser):
             user_callback=kwargs.pop("user_callback", None),
             docker_kwargs=kwargs.pop("docker_kwargs", None),
         )
+        self._raise_on_unknown = False
         super().__init__(*args, **kwargs)
         self.add_argument(
             "--dockrice-verbose",
@@ -200,6 +201,14 @@ class ArgumentParser(argparse.ArgumentParser):
             print("Dockrice ArgumentParser:")
             print(f"    Parsed args: {args}")
             print(f"    Unknown args: {unknown_args}")
+        if self._raise_on_unknown and unknown_args:
+            msg = ('unrecognized arguments: %s')
+            self.error(msg % ' '.join(unknown_args))
+        self._raise_on_unknown = False
         sys.exit(
             self._docker_action_factory.run_docker(args=args, unknown_args=unknown_args)
         )
+
+    def parse_args(self, args=None, namespace=None):
+        self._raise_on_unknown = True
+        self.parse_known_args(args=args, namespace=namespace)
