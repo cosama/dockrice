@@ -5,6 +5,7 @@ import uuid
 from docker.types import Mount
 from typing import Union, Tuple
 from enum import Enum
+from collections.abc import Hashable, MutableSet
 
 PathLike = Union[pathlib.PurePath, str]
 
@@ -143,3 +144,77 @@ class DockerPathFactory:
             read_only=self.read_only,
             mount_parent=self.mount_parent,
         )
+
+
+class MountSet(tuple):
+    """Simple, set-like class to hold mounts.
+    
+    It makes sure a mount is only present once. If a mount is marked as read only,
+    but the same mount is added as writable the mount will be marked as writable.
+
+    Inherits from tuple to be able to be used as a mount argument in docker.
+    """
+
+    @staticmethod
+    def _mirror_readonly(x):
+        x = x.copy()
+        x["ReadOnly"] = not x["ReadOnly"]
+        return x
+
+    def __init__(self, iterable=()):
+        self.data = []
+        for o in iterable:
+            self.add(o)
+
+    def __contains__(self, value):
+        return value in self.data or self._mirror_readonly(value) in self.data
+
+    def __iter__(self):
+        return iter(self.data)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __repr__(self):
+        return repr(self.data)
+
+    def add(self, item):
+        assert isinstance(item, Mount), "Mount list can only hold docker.types.Mount objects."
+        print(item, self.data)
+        if item not in self.data:
+            rev_item = self._mirror_readonly(item)
+            if rev_item in self.data:
+                self.data[self.data.index(rev_item)]["ReadOnly"] = False
+            else:
+                self.data.append(item)
+
+    def discard(self, item):
+        try:
+            self.data.remove(item)
+        except ValueError:
+            try:
+                self.data.remove(self._mirror_readonly(item))
+            except ValueError:
+                pass
+
+    def remove(self, item):
+        try:
+            self.data.remove(item)
+        except ValueError:
+            try:
+                self.data.remove(self._mirror_readonly(item))
+            except ValueError:
+                raise KeyError("Item not in MountSet")
+
+    def update(self, iterable):
+        for o in iterable:
+            self.add(o)
+
+    def count(self, value):
+        return int(value in self)
+
+    def index(self, value):
+        try:
+            return self.data.index(value)
+        except ValueError:
+            return self.data.index(self._mirror_readonly(value))
