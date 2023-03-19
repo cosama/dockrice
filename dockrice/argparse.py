@@ -2,7 +2,7 @@ import argparse
 import sys
 import pathlib
 import docker
-from .dockerpath import DockerPath, DockerPathFactory, MountOption
+from .dockerpath import DockerPath, DockerPathFactory, MountOption, MountSet
 from .utils import get_image, run_image
 import warnings
 
@@ -42,7 +42,7 @@ class DockerActionFactory:
         docker_kwargs=None,
         dockrice_verbose=False,
     ):
-        self.mounts = []
+        self.mounts = MountSet()
         self.run_command = []
         self.image = image
         self.docker_kwargs = docker_kwargs if docker_kwargs is not None else {}
@@ -65,7 +65,7 @@ class DockerActionFactory:
         if script_name != "":
             if not isinstance(script_name, DockerPath):
                 script_name = DockerPath(script_name, mount_parent=True, read_only=True)
-            self.mounts.append(script_name.get_mount())
+            self.mounts.add(script_name.get_mount())
             self.run_command.append(str(script_name.mount_path))
 
     def __call__(factory_self, action=None):
@@ -124,15 +124,7 @@ class DockerActionFactory:
                     ret_value = self._docker_path_factory(ret_value)
                 if isinstance(ret_value, DockerPath):
                     self.run_command.append(str(ret_value.mount_path))
-                    mount = ret_value.get_mount()
-                    if mount not in self.mounts:
-                        # here we need to check if read only changed is in mounts instead
-                        mount["ReadOnly"] = not mount["ReadOnly"]
-                        if mount in self.mounts:
-                            self.mounts[self.mounts.index(mount)]["ReadOnly"] = False
-                        else:
-                            mount["ReadOnly"] = not mount["ReadOnly"]
-                            self.mounts.append(mount)
+                    self.mounts.add(ret_value.get_mount())
                 else:
                     self.run_command.append(parse_value)
                 return ret_value
