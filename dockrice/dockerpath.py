@@ -180,7 +180,6 @@ class MountSet(tuple):
 
     def add(self, item):
         assert isinstance(item, Mount), "Mount list can only hold docker.types.Mount objects."
-        print(item, self.data)
         if item not in self.data:
             rev_item = self._mirror_readonly(item)
             if rev_item in self.data:
