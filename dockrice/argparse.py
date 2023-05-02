@@ -47,7 +47,12 @@ class DockerActionFactory:
             self.mounts = MountSet()
         else:
             self.mounts = MountSet(
-                [m.get_mount() if isinstance(m, DockerPath) else DockerPath(m).get_mount() for m in mounts]
+                [
+                    m.get_mount()
+                    if isinstance(m, DockerPath)
+                    else DockerPath(m).get_mount()
+                    for m in mounts
+                ]
             )
         self.run_command = []
         self.default_mounts = []
@@ -96,7 +101,9 @@ class DockerActionFactory:
                 # if type is Path and default is defined, we need to mount it
                 # the default will be replaced.
                 self._default_mount = None
-                if "default" in kwargs and issubclass(kwargs.get("type", type(None)), pathlib.PurePath):
+                if "default" in kwargs and issubclass(
+                    kwargs.get("type", type(None)), pathlib.PurePath
+                ):
                     if isinstance(kwargs["default"], DockerPath):
                         self._default_mount = kwargs["default"].get_mount()
                     else:

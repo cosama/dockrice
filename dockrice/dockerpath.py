@@ -148,7 +148,7 @@ class DockerPathFactory:
 
 class MountSet(tuple):
     """Simple, set-like class to hold mounts.
-    
+
     It makes sure a mount is only present once. If a mount is marked as read only,
     but the same mount is added as writable the mount will be marked as writable.
 
@@ -179,7 +179,9 @@ class MountSet(tuple):
         return repr(self.data)
 
     def add(self, item):
-        assert isinstance(item, Mount), "Mount list can only hold docker.types.Mount objects."
+        assert isinstance(
+            item, Mount
+        ), "Mount list can only hold docker.types.Mount objects."
         if item not in self.data:
             rev_item = self._mirror_readonly(item)
             if rev_item in self.data:
