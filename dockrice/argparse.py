@@ -41,11 +41,27 @@ class DockerActionFactory:
         user_callback=None,
         docker_kwargs=None,
         dockrice_verbose=False,
+        mounts=None,
     ):
-        self.mounts = MountSet()
+        if mounts is None:
+            self.mounts = MountSet()
+        else:
+            self.mounts = MountSet(
+                [
+                    m.get_mount()
+                    if isinstance(m, DockerPath)
+                    else DockerPath(m).get_mount()
+                    for m in mounts
+                ]
+            )
         self.run_command = []
+        self.default_mounts = []
         self.image = image
+
         self.docker_kwargs = docker_kwargs if docker_kwargs is not None else {}
+        # set working_dir to current directory, so that relative path work
+        self.docker_kwargs.setdefault("working_dir", str(pathlib.Path.cwd()))
+
         self.dockrice_verbose = dockrice_verbose
 
         self._user_callback = user_callback
@@ -77,9 +93,28 @@ class DockerActionFactory:
 
         class DockerAction(action):
             mounts = factory_self.mounts
+            default_mounts = factory_self.default_mounts
             run_command = factory_self.run_command
+            default_mounts = factory_self.default_mounts
 
             def __init__(self, *args, **kwargs):
+                # if type is Path and default is defined, we need to mount it
+                # the default will be replaced.
+                self._default_mount = None
+                if "default" in kwargs and issubclass(
+                    kwargs.get("type", type(None)), pathlib.PurePath
+                ):
+                    if isinstance(kwargs["default"], DockerPath):
+                        self._default_mount = kwargs["default"].get_mount()
+                    else:
+                        self._default_mount = DockerPath(
+                            kwargs["default"],
+                            mount_parent=kwargs.get("mount_parent", None),
+                            mount_path=kwargs.get("mount_path", MountOption.host),
+                            read_only=kwargs.get("read_only", False),
+                        ).get_mount()
+                    self.default_mounts.append(self._default_mount)
+
                 # here we postpone the type conversion and choice checking
                 self._hidden_type = kwargs.pop("type", None)
                 self._hidden_choices = kwargs.pop("choices", None)
@@ -91,6 +126,9 @@ class DockerActionFactory:
                 super().__init__(*args, **kwargs)
 
             def __call__(self, parser, namespace, values, option_string=None):
+                # remove default, now that we call the action
+                if self._default_mount is not None:
+                    self.default_mounts.remove(self._default_mount)
                 # this is only called if the option_string was present in args
                 if option_string == "--dockrice-verbose":
                     factory_self.dockrice_verbose = True
@@ -151,7 +189,7 @@ class DockerActionFactory:
             image,
             self.run_command,
             client=client,
-            mounts=self.mounts,
+            mounts=MountSet([*self.mounts, *self.default_mounts]),
             **self.docker_kwargs,
             dockrice_verbose=self.dockrice_verbose,
         )
@@ -170,6 +208,7 @@ class ArgumentParser(argparse.ArgumentParser):
             run_command=kwargs.pop("run_command", ["python"]),
             user_callback=kwargs.pop("user_callback", None),
             docker_kwargs=kwargs.pop("docker_kwargs", None),
+            mounts=kwargs.pop("mounts", None),
         )
         self._raise_on_unknown = False
         super().__init__(*args, **kwargs)

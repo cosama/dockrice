@@ -195,7 +195,7 @@ def run_image(image, cmd, client=None, return_logs=False, auto_remove=True, **kw
     The containers exit code, (the log as a list of strings)
     """
     with KillContainerOnInterrupt(
-        image, cmd, client=None, auto_remove=auto_remove, **kwargs
+        image, cmd, client=client, auto_remove=auto_remove, **kwargs
     ) as container:
         if return_logs:
             ret_string = [line.decode("utf-8") for line in container.logs(stream=True)]

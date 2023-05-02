@@ -21,7 +21,7 @@ parser = argparse.ArgumentParser(
     description="A simple example of running a script in docker.", **parser_kwargs
 )
 parser.add_argument("--bool-flag", help="A boolean flag.", action="store_true")
-parser.add_argument("--int-flag", help="A integer.", default=None, type=int),
+parser.add_argument("--int-flag", help="A integer.", default=None, type=int)
 parser.add_argument(
     "output_files",
     help="A bunch of files to write data to",
@@ -30,6 +30,9 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+
+
+print("The current directory is", pathlib.Path.cwd())
 
 for fname in args.output_files:
     with open(fname, "w") as ofile:
