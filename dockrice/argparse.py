@@ -7,6 +7,10 @@ from .utils import get_image, run_image
 import warnings
 
 
+class DockerizeDoneExit(SystemExit):
+    pass
+
+
 # This works because the order argparse performs tasks is as follows:
 #    1) Apply type (grab definition from Action.type)
 #    2) Check choices (grab definition from Action.choices)
@@ -104,16 +108,17 @@ class DockerActionFactory:
                 if "default" in kwargs and issubclass(
                     kwargs.get("type", type(None)), pathlib.PurePath
                 ):
-                    if isinstance(kwargs["default"], DockerPath):
-                        self._default_mount = kwargs["default"].get_mount()
-                    else:
-                        self._default_mount = DockerPath(
-                            kwargs["default"],
-                            mount_parent=kwargs.get("mount_parent", None),
-                            mount_path=kwargs.get("mount_path", MountOption.host),
-                            read_only=kwargs.get("read_only", False),
-                        ).get_mount()
-                    self.default_mounts.append(self._default_mount)
+                    if kwargs["default"] is not None:
+                        if isinstance(kwargs["default"], DockerPath):
+                            self._default_mount = kwargs["default"].get_mount()
+                        else:
+                            self._default_mount = DockerPath(
+                                kwargs["default"],
+                                mount_parent=kwargs.get("mount_parent", None),
+                                mount_path=kwargs.get("mount_path", MountOption.host),
+                                read_only=kwargs.get("read_only", False),
+                            ).get_mount()
+                        self.default_mounts.append(self._default_mount)
 
                 # here we postpone the type conversion and choice checking
                 self._hidden_type = kwargs.pop("type", None)
@@ -146,7 +151,10 @@ class DockerActionFactory:
                         ret_value.append(self._recursive_resolve_args(v))
                     return ret_value
                 # here we do the type conversion and choice checking
-                ret_value = self._hidden_type(parse_value)
+                if self._hidden_type is not None:
+                    ret_value = self._hidden_type(parse_value)
+                else:
+                    ret_value = parse_value
                 if (
                     self._hidden_choices is not None
                     and ret_value not in self._hidden_choices
@@ -236,9 +244,10 @@ class ArgumentParser(argparse.ArgumentParser):
             msg = "unrecognized arguments: %s"
             self.error(msg % " ".join(unknown_args))
         self._raise_on_unknown = False
-        sys.exit(
-            self._docker_action_factory.run_docker(args=args, unknown_args=unknown_args)
+        ret_value = self._docker_action_factory.run_docker(
+            args=args, unknown_args=unknown_args
         )
+        raise DockerizeDoneExit(ret_value)
 
     def parse_args(self, args=None, namespace=None):
         self._raise_on_unknown = True
