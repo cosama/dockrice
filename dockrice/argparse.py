@@ -5,6 +5,7 @@ import docker
 from .dockerpath import DockerPath, DockerPathFactory, MountOption, MountSet
 from .utils import get_image, run_image
 import warnings
+import inspect
 
 
 class DockerizeDoneExit(SystemExit):
@@ -52,9 +53,11 @@ class DockerActionFactory:
         else:
             self.mounts = MountSet(
                 [
-                    m.get_mount()
-                    if isinstance(m, DockerPath)
-                    else DockerPath(m).get_mount()
+                    (
+                        m.get_mount()
+                        if isinstance(m, DockerPath)
+                        else DockerPath(m).get_mount()
+                    )
                     for m in mounts
                 ]
             )
@@ -105,8 +108,11 @@ class DockerActionFactory:
                 # if type is Path and default is defined, we need to mount it
                 # the default will be replaced.
                 self._default_mount = None
-                if "default" in kwargs and issubclass(
-                    kwargs.get("type", type(None)), pathlib.PurePath
+                type_value = kwargs.get("type", type(None))
+                if (
+                    "default" in kwargs
+                    and inspect.isclass(type_value)  # it could be an object
+                    and issubclass(type_value, pathlib.PurePath)
                 ):
                     if kwargs["default"] is not None:
                         if isinstance(kwargs["default"], DockerPath):
