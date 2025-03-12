@@ -93,7 +93,7 @@ class DockerActionFactory:
 
     def __call__(factory_self, action=None):
 
-        if action == None:
+        if action is None:
             action = "store"
         if isinstance(action, str):
             action = getattr(argparse, factory_self.select[action])

@@ -5,13 +5,13 @@ import uuid
 from docker.types import Mount
 from typing import Union, Tuple
 from enum import Enum
-from collections.abc import Hashable, MutableSet
+import sys
 
 PathLike = Union[pathlib.PurePath, str]
 
 
 def remove_prefix(string, prefix):
-    return string[(len(prefix) if string.startswith(prefix) else 0) :]
+    return string[(len(prefix) if string.startswith(prefix) else 0):]
 
 
 class MountOption(Enum):
@@ -59,7 +59,8 @@ class DockerPath(type(pathlib.Path())):
         self._mount_path = mount_path
         self._mount_parent = mount_parent
         self._read_only = read_only
-        super().__init__(*path)
+        if sys.version_info >= (3, 12):
+            super().__init__(*path)
 
     @property
     def read_only(self) -> bool:
@@ -95,7 +96,7 @@ class DockerPath(type(pathlib.Path())):
                 mount_path = pathlib.PurePosixPath(*mount_path)
             else:
                 mount_path = pathlib.PurePosixPath(mount_path)
-            if mount_parent is True:
+            if self.mount_parent is True:
                 mount_path = pathlib.PurePosixPath(mount_path, self.name)
         assert (
             mount_path.is_absolute()
