@@ -56,8 +56,28 @@ class DockerPath(type(pathlib.Path())):
             If None, will check if the path exist, if it does, this is set to False,
             if not it is set to True.
         """
-        # print(self.resolve(strict=False))
-        if mount_path == MountOption.host:
+        self._mount_path = mount_path
+        self._mount_parent = mount_parent
+        self._read_only = read_only
+        super().__init__(*path)
+
+    @property
+    def read_only(self) -> bool:
+        return self._read_only
+
+    @property
+    def mount_parent(self) -> bool:
+        if self._mount_parent is None:
+            if self.resolve(strict=False).exists():
+                mount_parent = False
+            else:
+                mount_parent = True
+            return mount_parent
+        return self._mount_parent
+
+    @property
+    def mount_path(self) -> pathlib.PurePosixPath:
+        if self._mount_path == MountOption.host:
             # on windows self is a WindowsPath object, we need to mirror it into a
             # path valid in posix this includes removing the drive ("C:")
             mount_path = pathlib.PurePosixPath(
@@ -67,9 +87,10 @@ class DockerPath(type(pathlib.Path())):
                 )
             )
             # print(mount_path)
-        elif mount_path == MountOption.random:
+        elif self._mount_path == MountOption.random:
             mount_path = pathlib.PurePosixPath("/temp", str(uuid.uuid4()), self.name)
         else:
+            mount_path = self._mount_path
             if isinstance(mount_path, tuple):
                 mount_path = pathlib.PurePosixPath(*mount_path)
             else:
@@ -79,26 +100,7 @@ class DockerPath(type(pathlib.Path())):
         assert (
             mount_path.is_absolute()
         ), f"Require an absolute path for the mount path. Is '{mount_path}'."
-        if mount_parent is None:
-            if self.resolve(strict=False).exists():
-                mount_parent = False
-            else:
-                mount_parent = True
-        self._mount_path = mount_path
-        self._mount_parent = mount_parent
-        self._read_only = read_only
-
-    @property
-    def read_only(self) -> bool:
-        return self._read_only
-
-    @property
-    def mount_parent(self) -> bool:
-        return self._mount_parent
-
-    @property
-    def mount_path(self) -> pathlib.PurePosixPath:
-        return self._mount_path
+        return mount_path
 
     def _get_target_source(self) -> Tuple[pathlib.PurePath]:
         if self.mount_parent:
