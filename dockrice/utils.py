@@ -204,3 +204,25 @@ def run_image(image, cmd, client=None, return_logs=False, auto_remove=True, **kw
         for line in container.logs(stream=True):
             print(line.decode("utf-8"), end="", flush=True)
         return container.wait()["StatusCode"]
+
+
+def resolve_gpu_device(arg):
+    """Takes a string, similar to the docker --gpus flag and converts it to dockerpy.
+
+    Parameters
+    ----------
+    args: str
+        The string that would be passed to the --gpus flag: "all" or "device=...".
+
+    Returns:
+    --------
+    a list of DeviceRequest objects
+    """
+
+    if arg == "all":
+        return [docker.types.DeviceRequest(count=-1, capabilities=[["gpu"]])]
+    elif arg.startswith("device="):
+        devices = arg.replace("device=", "").split(",")
+        return [docker.types.DeviceRequest(device_ids=devices, capabilities=[["gpu"]])]
+
+    raise ValueError(f"Unknown gpu device value: {arg}")

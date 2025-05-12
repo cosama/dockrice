@@ -11,7 +11,7 @@ PathLike = Union[pathlib.PurePath, str]
 
 
 def remove_prefix(string, prefix):
-    return string[(len(prefix) if string.startswith(prefix) else 0):]
+    return string[(len(prefix) if string.startswith(prefix) else 0) :]
 
 
 class MountOption(Enum):

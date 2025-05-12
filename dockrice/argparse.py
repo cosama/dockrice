@@ -3,7 +3,7 @@ import sys
 import pathlib
 import docker
 from .dockerpath import DockerPath, DockerPathFactory, MountOption, MountSet
-from .utils import get_image, run_image
+from .utils import get_image, run_image, resolve_gpu_device
 import warnings
 import inspect
 
@@ -145,6 +145,13 @@ class DockerActionFactory:
                     factory_self.dockrice_verbose = True
                     delattr(namespace, "dockrice_verbose")
                     return
+                if option_string == "--gpus":
+                    factory_self.docker_kwargs.setdefault("device_requests", [])
+                    factory_self.docker_kwargs["device_requests"].extend(
+                        resolve_gpu_device(values)
+                    )
+                    delattr(namespace, "gpus")
+                    return
                 if option_string is not None:
                     self.run_command.append(option_string)
                 values = self._recursive_resolve_args(values)
@@ -230,6 +237,11 @@ class ArgumentParser(argparse.ArgumentParser):
             "--dockrice-verbose",
             help="Increases verbosity of dockrice.",
             action="store_true",
+        )
+        self.add_argument(
+            "--gpus",
+            help="Adds gpu capability to the docker container.",
+            type=str,
         )
 
     def add_argument(self, *args, **kwargs):
