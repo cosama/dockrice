@@ -5,6 +5,19 @@ import os
 from typing import Union
 
 
+def image_is_not_on_server(e):
+    """Checks an docker.error.APIError for if it means
+    the image can not be found."""
+
+    message = e.response.json()["message"].lower()
+    return (
+        "manifest invalid" in message
+        or "manifest unknown" in message
+        or "name invalid" in message
+        or "name unknown" in message
+    )
+
+
 def get_image(
     image: Union[str, docker.models.images.Image],
     client: docker.DockerClient = None,
@@ -59,6 +72,9 @@ def get_image(
             return client.images.pull(image)
         except docker.errors.APIError as e:
             if not try_login:
+                raise e
+            # this means it can't find it, no point in logging in
+            if image_is_not_on_server(e):
                 raise e
             kwargs = {}
             if "/" in image:
