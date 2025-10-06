@@ -114,6 +114,9 @@ class DockerPath(type(pathlib.Path())):
 
     def get_mount(self) -> Mount:
         target, source = self._get_target_source()
+        if not self._read_only:
+            host_path = pathlib.Path(source)
+            host_path.mkdir(parents=True, exist_ok=True)
         return Mount(
             target,
             source,
