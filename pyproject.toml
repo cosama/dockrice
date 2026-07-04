@@ -1,3 +1,36 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "dockrice"
+version = "0.0.7"
+description = "Run python scripts in docker from within python."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Marco Salathe", email = "marco.salathe@gmail.com" },
+]
+keywords = ["docker", "argparse", "pathlib", "containers"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = [
+    "docker",
+]
+
+[project.urls]
+Homepage = "https://github.com/cosama/dockrice"
+Repository = "https://github.com/cosama/dockrice"
+Issues = "https://github.com/cosama/dockrice/issues"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["dockrice*"]

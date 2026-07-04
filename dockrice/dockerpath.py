@@ -89,7 +89,9 @@ class DockerPath(type(pathlib.Path())):
             )
             # print(mount_path)
         elif self._mount_path == MountOption.random:
-            mount_path = pathlib.PurePosixPath("/temp", str(uuid.uuid4()), self.name)
+            mount_path = pathlib.PurePosixPath(
+                "/temp", str(uuid.uuid4()), self.resolve(strict=False).name
+            )
         else:
             mount_path = self._mount_path
             if isinstance(mount_path, tuple):
@@ -97,20 +99,26 @@ class DockerPath(type(pathlib.Path())):
             else:
                 mount_path = pathlib.PurePosixPath(mount_path)
             if self.mount_parent is True:
-                mount_path = pathlib.PurePosixPath(mount_path, self.name)
+                mount_path = pathlib.PurePosixPath(
+                    mount_path, self.resolve(strict=False).name
+                )
         assert (
             mount_path.is_absolute()
         ), f"Require an absolute path for the mount path. Is '{mount_path}'."
         return mount_path
 
     def _get_target_source(self) -> Tuple[pathlib.PurePath]:
+        # resolve first so relative paths (e.g. './') expose a real parent and
+        # name; otherwise 'self.parent' of '.' is '.' while 'mount_path' is
+        # already absolute, misaligning target and source.
+        resolved = self.resolve(strict=False)
         if self.mount_parent:
             target = self.mount_path.parent
-            source = self.parent
+            source = resolved.parent
         else:
             target = self.mount_path
-            source = self
-        return str(target), str(source.resolve())
+            source = resolved
+        return str(target), str(source)
 
     def get_mount(self) -> Mount:
         target, source = self._get_target_source()

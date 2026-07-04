@@ -1,6 +1,10 @@
-*/__pycache__/*
-*.egg-info
-*.txt
-*.ipynb
-build/*
+__pycache__/
 *.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+*.ipynb
+uv.lock
+.claude
