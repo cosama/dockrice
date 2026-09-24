@@ -9,7 +9,22 @@ import inspect
 
 
 class DockerizeDoneExit(SystemExit):
+    """Raised on the host when docker execution succeeds (exit code 0) to short-circuit host execution."""
+
     pass
+
+
+class DockerProcessError(SystemExit):
+    """Raised on the host when docker execution fails with a non-zero exit code."""
+
+    def __init__(self, returncode, cmd=None):
+        self.returncode = returncode
+        self.cmd = cmd
+        super().__init__(returncode)
+
+    def __str__(self):
+        cmd_str = f" for command {self.cmd}" if self.cmd else ""
+        return f"Docker container failed with exit code {self.returncode}{cmd_str}"
 
 
 # This works because the order argparse performs tasks is as follows:
@@ -265,7 +280,11 @@ class ArgumentParser(argparse.ArgumentParser):
         ret_value = self._docker_action_factory.run_docker(
             args=args, unknown_args=unknown_args
         )
-        raise DockerizeDoneExit(ret_value)
+        if ret_value == 0:
+            raise DockerizeDoneExit(ret_value)
+        raise DockerProcessError(
+            ret_value, cmd=self._docker_action_factory.run_command
+        )
 
     def parse_args(self, args=None, namespace=None):
         self._raise_on_unknown = True
